@@ -27,13 +27,26 @@ if os.environ.get('RENDER'):
     app.config['REMEMBER_COOKIE_HTTPONLY'] = True
     app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 
-if os.path.isdir('/data'):
-    _db_dir = '/data'           # Render paid disk
-elif os.environ.get('RENDER'):
-    _db_dir = '/tmp'            # Render free tier (ephemeral but writable)
-else:
-    _db_dir = os.path.join(os.path.dirname(__file__), 'instance')  # local dev
-os.makedirs(_db_dir, exist_ok=True)
+def _pick_db_dir():
+    """Return the first writable directory for the SQLite DB."""
+    candidates = []
+    if os.environ.get('RENDER'):
+        candidates = ['/data', '/tmp']
+    else:
+        candidates = [os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')]
+    for path in candidates:
+        try:
+            os.makedirs(path, exist_ok=True)
+            probe = os.path.join(path, '.write_probe')
+            with open(probe, 'w') as f:
+                f.write('')
+            os.remove(probe)
+            return path
+        except Exception:
+            continue
+    return '/tmp'
+
+_db_dir = _pick_db_dir()
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{_db_dir}/vacations.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -222,12 +235,19 @@ class LateArrival(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return db.session.get(User, int(user_id))
+    try:
+        return db.session.get(User, int(user_id))
+    except Exception:
+        return None
 
 
 # ─────────────────────────────────────────────
 # Routes - Pages
 # ─────────────────────────────────────────────
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'})
 
 @app.route('/')
 def index():
@@ -251,7 +271,7 @@ def dashboard():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     login_identifier = data.get('username')
     user = User.query.filter(
         db.or_(User.username == login_identifier, User.email == login_identifier)
@@ -832,7 +852,10 @@ def init_db():
 
 
 # Initialize DB on startup (works with gunicorn and direct run)
-init_db()
+try:
+    init_db()
+except Exception as _init_err:
+    print(f"⚠️  init_db failed: {_init_err} — the app will still start but may have no users")
 
 if __name__ == '__main__':
     app.run(debug=True, port=5010)
