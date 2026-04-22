@@ -783,111 +783,22 @@ def init_db():
         db.create_all()
 
         if User.query.count() == 0:
-            # Create demo users
+            admin_password = os.environ.get('ADMIN_PASSWORD', 'admin')
             admin = User(
                 username='admin',
                 email='admin@empresa.com',
-                first_name='Carlos',
-                last_name='García',
+                first_name='Admin',
+                last_name='Admin',
                 department='Dirección',
                 role='admin',
                 total_days=25,
                 avatar_color='#6C5CE7'
             )
-            admin.set_password('admin')
+            admin.set_password(admin_password)
+            print(f"✅ Admin user created (set ADMIN_PASSWORD env var to change default password)")
 
-            manager = User(
-                username='manager',
-                email='manager@empresa.com',
-                first_name='María',
-                last_name='López',
-                department='Recursos Humanos',
-                role='manager',
-                total_days=23,
-                avatar_color='#00B894'
-            )
-            manager.set_password('manager')
-
-            emp1 = User(
-                username='javier',
-                email='javier@empresa.com',
-                first_name='Javier',
-                last_name='Martínez',
-                department='Desarrollo',
-                role='employee',
-                total_days=22,
-                avatar_color='#0984E3'
-            )
-            emp1.set_password('password')
-
-            emp2 = User(
-                username='ana',
-                email='ana@empresa.com',
-                first_name='Ana',
-                last_name='Rodríguez',
-                department='Marketing',
-                role='employee',
-                total_days=22,
-                avatar_color='#E17055'
-            )
-            emp2.set_password('password')
-
-            emp3 = User(
-                username='pedro',
-                email='pedro@empresa.com',
-                first_name='Pedro',
-                last_name='Sánchez',
-                department='Desarrollo',
-                role='employee',
-                total_days=22,
-                avatar_color='#E84393'
-            )
-            emp3.set_password('password')
-
-            emp4 = User(
-                username='laura',
-                email='laura@empresa.com',
-                first_name='Laura',
-                last_name='Fernández',
-                department='Diseño',
-                role='employee',
-                total_days=22,
-                avatar_color='#00CEC9'
-            )
-            emp4.set_password('password')
-
-            db.session.add_all([admin, manager, emp1, emp2, emp3, emp4])
+            db.session.add(admin)
             db.session.commit()
-
-            # Add demo departments
-            dept_names = ['Dirección', 'Recursos Humanos', 'Desarrollo', 'Marketing', 'Diseño', 'Ventas', 'Soporte']
-            for name in dept_names:
-                if not Department.query.filter_by(name=name).first():
-                    db.session.add(Department(name=name))
-            db.session.commit()
-
-            # Add some demo vacation requests
-            today = date.today()
-            year = today.year
-
-            demo_vacations = [
-                VacationRequest(user_id=emp1.id, start_date=date(year, 7, 14), end_date=date(year, 7, 25),
-                              vacation_type='vacaciones', reason='Vacaciones de verano', status='approved',
-                              reviewed_by=manager.id, reviewed_at=datetime.utcnow()),
-                VacationRequest(user_id=emp2.id, start_date=date(year, 8, 4), end_date=date(year, 8, 15),
-                              vacation_type='vacaciones', reason='Viaje familiar', status='approved',
-                              reviewed_by=manager.id, reviewed_at=datetime.utcnow()),
-                VacationRequest(user_id=emp3.id, start_date=date(year, 6, 16), end_date=date(year, 6, 20),
-                              vacation_type='asuntos_propios', reason='Asuntos personales', status='pending'),
-                VacationRequest(user_id=emp4.id, start_date=date(year, 9, 1), end_date=date(year, 9, 5),
-                              vacation_type='vacaciones', reason='Puente de septiembre', status='pending'),
-                VacationRequest(user_id=emp1.id, start_date=date(year, 12, 23), end_date=date(year, 12, 31),
-                              vacation_type='vacaciones', reason='Navidad', status='pending'),
-                VacationRequest(user_id=manager.id, start_date=date(year, 8, 18), end_date=date(year, 8, 29),
-                              vacation_type='vacaciones', reason='Vacaciones agosto', status='approved',
-                              reviewed_by=admin.id, reviewed_at=datetime.utcnow()),
-            ]
-            db.session.add_all(demo_vacations)
 
             # Add Spanish public holidays for current year
             holidays = [
@@ -903,9 +814,11 @@ def init_db():
             ]
             db.session.add_all(holidays)
             db.session.commit()
-            print("✅ Base de datos inicializada con datos de ejemplo")
+            print("✅ Base de datos inicializada")
 
+
+# Initialize DB on startup (works with gunicorn and direct run)
+init_db()
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True, port=5010)
