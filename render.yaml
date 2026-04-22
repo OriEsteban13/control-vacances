@@ -9,7 +9,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ADMIN_PASSWORD
-        value: changeme2026
+        value: admin
       - key: PYTHON_VERSION
         value: 3.11.0
 

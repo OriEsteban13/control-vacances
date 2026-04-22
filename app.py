@@ -27,26 +27,11 @@ if os.environ.get('RENDER'):
     app.config['REMEMBER_COOKIE_HTTPONLY'] = True
     app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 
-def _pick_db_dir():
-    """Return the first writable directory for the SQLite DB."""
-    candidates = []
-    if os.environ.get('RENDER'):
-        candidates = ['/data', '/tmp']
-    else:
-        candidates = [os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')]
-    for path in candidates:
-        try:
-            os.makedirs(path, exist_ok=True)
-            probe = os.path.join(path, '.write_probe')
-            with open(probe, 'w') as f:
-                f.write('')
-            os.remove(probe)
-            return path
-        except Exception:
-            continue
-    return '/tmp'
-
-_db_dir = _pick_db_dir()
+if os.environ.get('RENDER'):
+    _db_dir = '/tmp'
+else:
+    _db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+os.makedirs(_db_dir, exist_ok=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{_db_dir}/vacations.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -813,49 +798,56 @@ def get_late_ranking():
 
 def init_db():
     with app.app_context():
-        db.create_all()
+        import traceback
+        try:
+            db.create_all()
+            print(f"[init_db] DB path: {_db_dir}/vacations.db")
 
-        if User.query.count() == 0:
             admin_password = os.environ.get('ADMIN_PASSWORD', 'admin')
-            admin = User(
-                username='admin',
-                email='admin@empresa.com',
-                first_name='Admin',
-                last_name='Admin',
-                department='Dirección',
-                role='admin',
-                total_days=25,
-                avatar_color='#6C5CE7'
-            )
+
+            admin = User.query.filter_by(username='admin').first()
+            if admin is None:
+                admin = User(
+                    username='admin',
+                    email='admin@empresa.com',
+                    first_name='Admin',
+                    last_name='Admin',
+                    department='Direccion',
+                    role='admin',
+                    total_days=25,
+                    avatar_color='#6C5CE7'
+                )
+                db.session.add(admin)
+
+            # Always sync password to current ADMIN_PASSWORD env var
             admin.set_password(admin_password)
-            print(f"✅ Admin user created (set ADMIN_PASSWORD env var to change default password)")
-
-            db.session.add(admin)
             db.session.commit()
+            print(f"[init_db] ✅ Admin listo — usuario: admin  contrasena: {admin_password}")
 
-            # Add Spanish public holidays for current year
-            year = date.today().year
-            holidays = [
-                PublicHoliday(date=date(year, 1, 1), name='Año Nuevo', year=year),
-                PublicHoliday(date=date(year, 1, 6), name='Día de Reyes', year=year),
-                PublicHoliday(date=date(year, 5, 1), name='Día del Trabajo', year=year),
-                PublicHoliday(date=date(year, 8, 15), name='Asunción de la Virgen', year=year),
-                PublicHoliday(date=date(year, 10, 12), name='Fiesta Nacional de España', year=year),
-                PublicHoliday(date=date(year, 11, 1), name='Día de Todos los Santos', year=year),
-                PublicHoliday(date=date(year, 12, 6), name='Día de la Constitución', year=year),
-                PublicHoliday(date=date(year, 12, 8), name='Inmaculada Concepción', year=year),
-                PublicHoliday(date=date(year, 12, 25), name='Navidad', year=year),
-            ]
-            db.session.add_all(holidays)
-            db.session.commit()
-            print("✅ Base de datos inicializada")
+            if PublicHoliday.query.count() == 0:
+                year = date.today().year
+                holidays = [
+                    PublicHoliday(date=date(year, 1, 1), name='Año Nuevo', year=year),
+                    PublicHoliday(date=date(year, 1, 6), name='Día de Reyes', year=year),
+                    PublicHoliday(date=date(year, 5, 1), name='Día del Trabajo', year=year),
+                    PublicHoliday(date=date(year, 8, 15), name='Asunción de la Virgen', year=year),
+                    PublicHoliday(date=date(year, 10, 12), name='Fiesta Nacional de España', year=year),
+                    PublicHoliday(date=date(year, 11, 1), name='Día de Todos los Santos', year=year),
+                    PublicHoliday(date=date(year, 12, 6), name='Día de la Constitución', year=year),
+                    PublicHoliday(date=date(year, 12, 8), name='Inmaculada Concepción', year=year),
+                    PublicHoliday(date=date(year, 12, 25), name='Navidad', year=year),
+                ]
+                db.session.add_all(holidays)
+                db.session.commit()
+                print("[init_db] ✅ Festivos creados")
+        except Exception as e:
+            print(f"[init_db] ERROR: {e}")
+            print(traceback.format_exc())
+            db.session.rollback()
 
 
-# Initialize DB on startup (works with gunicorn and direct run)
-try:
-    init_db()
-except Exception as _init_err:
-    print(f"⚠️  init_db failed: {_init_err} — the app will still start but may have no users")
+# Initialize DB on startup
+init_db()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5010)
