@@ -18,6 +18,15 @@ from flask import Response
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'vacation-control-secret-key-2026')
 
+# Secure cookie settings for HTTPS (Render production)
+if os.environ.get('RENDER'):
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['REMEMBER_COOKIE_SECURE'] = True
+    app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+    app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
+
 if os.path.isdir('/data'):
     _db_dir = '/data'           # Render paid disk
 elif os.environ.get('RENDER'):

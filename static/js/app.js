@@ -30,11 +30,24 @@ const State = {
 // ─────────────────────────────────────────────
 
 async function api(url, options = {}) {
-    const res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json', ...options.headers },
-        ...options,
-    });
-    const data = await res.json();
+    let res;
+    try {
+        res = await fetch(url, {
+            headers: { 'Content-Type': 'application/json', ...options.headers },
+            ...options,
+        });
+    } catch (e) {
+        throw new Error('No se puede conectar al servidor. Comprueba tu conexión.');
+    }
+    let data;
+    try {
+        data = await res.json();
+    } catch (e) {
+        if (res.status === 502 || res.status === 503 || res.status === 504) {
+            throw new Error('El servicio está iniciando, por favor espera unos segundos e inténtalo de nuevo.');
+        }
+        throw new Error(`Error del servidor (${res.status})`);
+    }
     if (!res.ok && !data.success) {
         throw new Error(data.error || 'Error del servidor');
     }
@@ -109,8 +122,8 @@ function renderLogin() {
             <div class="login-error" id="loginError"></div>
             <form id="loginForm">
                 <div class="form-group">
-                    <label for="username">Usuario</label>
-                    <input type="text" id="username" class="form-input" placeholder="Tu nombre de usuario" autocomplete="username" required>
+                    <label for="username">Usuario o email</label>
+                    <input type="text" id="username" class="form-input" placeholder="Tu usuario o email" autocomplete="username" required>
                 </div>
                 <div class="form-group">
                     <label for="password">Contraseña</label>
@@ -120,6 +133,9 @@ function renderLogin() {
                     Iniciar Sesión
                 </button>
             </form>
+            <p style="margin-top: 16px; font-size: 0.78rem; color: var(--text-dim); text-align: center;">
+                Si el servidor acaba de despertar, el primer inicio de sesión puede tardar unos segundos.
+            </p>
         </div>
     </div>`;
 }
