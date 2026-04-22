@@ -805,6 +805,7 @@ def init_db():
             db.session.commit()
 
             # Add Spanish public holidays for current year
+            year = date.today().year
             holidays = [
                 PublicHoliday(date=date(year, 1, 1), name='Año Nuevo', year=year),
                 PublicHoliday(date=date(year, 1, 6), name='Día de Reyes', year=year),
