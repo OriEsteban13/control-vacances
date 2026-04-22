@@ -12,7 +12,4 @@ services:
         value: changeme2026
       - key: PYTHON_VERSION
         value: 3.11.0
-    disk:
-      name: db
-      mountPath: /data
-      sizeGB: 1
+
