@@ -215,6 +215,12 @@ body {
     margin-top: var(--space-xs);
 }
 
+.login-logo .login-logo-img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .login-error {
     background: var(--color-danger-bg);
     border: 1px solid var(--color-danger-border);
@@ -1666,4 +1672,128 @@ textarea.form-input {
     text-transform: uppercase;
     color: var(--text-dim);
     margin-top: 2px;
+}
+
+/* ── Company settings & Profile avatar ── */
+
+.company-settings-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xl);
+}
+
+.company-logo-area {
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.company-logo-preview {
+    width: 96px;
+    height: 96px;
+    object-fit: contain;
+    display: block;
+    border-radius: var(--radius-md);
+    background: rgba(255,255,255,0.04);
+}
+
+.company-logo-placeholder {
+    width: 96px;
+    height: 96px;
+    background: var(--accent-gradient);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+}
+
+.logo-overlay {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 5px 0;
+    opacity: 0;
+    transition: opacity 0.18s;
+}
+.company-logo-area:hover .logo-overlay { opacity: 1; }
+
+.profile-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.profile-avatar-lg {
+    width: 72px !important;
+    height: 72px !important;
+    font-size: 1.6rem !important;
+    border-radius: var(--radius-md) !important;
+}
+
+.profile-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    opacity: 0;
+    transition: opacity 0.18s;
+}
+.profile-avatar-wrap:hover .profile-avatar-overlay { opacity: 1; }
+
+/* ── Logo & Avatar uploads ── */
+
+.login-logo-img {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-md);
+    box-shadow: 0 8px 24px rgba(108, 92, 231, 0.25);
+}
+
+.sidebar-logo-img {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.logo-upload-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    border-radius: var(--radius-xs, 4px);
+    color: var(--text-muted);
+    opacity: 0.55;
+    margin-left: auto;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+}
+.logo-upload-btn:hover { opacity: 1; }
+
+.avatar-upload-area {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) 0;
+}
+
+.avatar-upload-area #_avatarPreview .user-avatar,
+.avatar-upload-area #_avatarPreview img {
+    width: 64px;
+    height: 64px;
+    font-size: 1.1rem;
 }

@@ -9,6 +9,7 @@
 
 const State = {
     user: null,
+    companySettings: null,
     currentPage: 'dashboard',
     vacations: [],
     users: [],
@@ -24,6 +25,8 @@ const State = {
     filterStatus: 'all',
     selectedEmployeeId: null,
 };
+
+let _pendingAvatarImage = undefined;
 
 // ─────────────────────────────────────────────
 // API
@@ -55,6 +58,41 @@ async function api(url, options = {}) {
 }
 
 // ─────────────────────────────────────────────
+// Image Helpers
+// ─────────────────────────────────────────────
+
+async function resizeImage(file, maxPx = 256) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxPx || h > maxPx) {
+                    if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+                    else { w = Math.round(w * maxPx / h); h = maxPx; }
+                }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.82));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderAvatarEl(color, initials, avatarImage, size = 36) {
+    const sizeStyle = `width:${size}px;height:${size}px;`;
+    if (avatarImage) {
+        return `<img src="${avatarImage}" class="user-avatar" style="${sizeStyle}object-fit:cover;padding:0;" alt="">`;
+    }
+    const fs = size <= 32 ? '0.7rem' : size <= 48 ? '0.85rem' : '1.1rem';
+    return `<div class="user-avatar" style="background:${color};${sizeStyle}font-size:${fs};">${initials}</div>`;
+}
+
+// ─────────────────────────────────────────────
 // Toast Notifications
 // ─────────────────────────────────────────────
 
@@ -77,6 +115,81 @@ function showToast(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 3500);
 }
+
+// ─────────────────────────────────────────────
+// Logo & Avatar Upload
+// ─────────────────────────────────────────────
+
+window.handleLogoUpload = async function(input) {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+        const logoData = await resizeImage(file, 200);
+        const result = await api('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify({ logo_data: logoData })
+        });
+        State.companySettings = { ...State.companySettings, logo_data: result.logo_data };
+        showToast('Logo actualizado', 'success');
+        renderApp();
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+};
+
+window.saveCompanyName = async function() {
+    const input = document.getElementById('_companyNameInput');
+    const name = input?.value?.trim();
+    if (!name) { showToast('Escribe un nombre', 'error'); return; }
+    try {
+        const result = await api('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify({ company_name: name })
+        });
+        State.companySettings = { ...State.companySettings, company_name: result.company_name };
+        showToast('Nombre de empresa guardado', 'success');
+        renderApp();
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+};
+
+window.uploadProfileAvatar = async function(input, userId) {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+        const imgData = await resizeImage(file, 256);
+        await api(`/api/users/${userId}/avatar`, {
+            method: 'POST',
+            body: JSON.stringify({ avatar_image: imgData })
+        });
+        if (State.user.id === userId) {
+            const me = await api('/api/me');
+            if (me.authenticated) State.user = me.user;
+        }
+        showToast('Foto actualizada', 'success');
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+};
+
+window.previewAvatarChange = async function(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const data = await resizeImage(file, 256);
+    _pendingAvatarImage = data;
+    const preview = document.getElementById('_avatarPreview');
+    if (preview) preview.innerHTML = `<img src="${data}" class="user-avatar" style="width:64px;height:64px;object-fit:cover;padding:0;" alt="">`;
+};
+
+window.clearAvatarChange = function() {
+    _pendingAvatarImage = null;
+    const preview = document.getElementById('_avatarPreview');
+    if (preview) preview.innerHTML = '<div class="user-avatar" style="width:64px;height:64px;font-size:1.3rem;background:#b2bec3;color:#636e72;">✕</div>';
+};
 
 // ─────────────────────────────────────────────
 // Router
@@ -111,12 +224,14 @@ function renderApp() {
 // ─── Login ─────────────────────────────
 
 function renderLogin() {
+    const logo = State.companySettings?.logo_data;
+    const name = State.companySettings?.company_name || 'VacationControl';
     return `
     <div class="login-container">
         <div class="login-card">
             <div class="login-logo">
-                <div class="logo-icon">🌴</div>
-                <h1>VacationControl</h1>
+                ${logo ? `<img src="${logo}" class="login-logo-img" alt="Logo">` : '<div class="logo-icon">🌴</div>'}
+                <h1>${name}</h1>
                 <p>Gestión inteligente de vacaciones</p>
             </div>
             <div class="login-error" id="loginError"></div>
@@ -176,14 +291,20 @@ function renderLayout() {
     const u = State.user;
     const isAdmin = u.role === 'admin';
     const isManager = u.role === 'admin' || u.role === 'manager';
+    const logo = State.companySettings?.logo_data;
+    const companyName = State.companySettings?.company_name || 'VacationCtrl';
 
     return `
     <div class="app-layout">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-brand">
-                    <div class="brand-icon">🌴</div>
-                    <h2>VacationCtrl</h2>
+                    ${logo ? `<img src="${logo}" class="sidebar-logo-img" alt="Logo">` : '<div class="brand-icon">🌴</div>'}
+                    <h2>${companyName}</h2>
+                    ${isAdmin ? `
+                    <button class="logo-upload-btn" onclick="event.stopPropagation();document.getElementById('_logoFileHidden').click()" title="Cambiar logo de empresa">✏️</button>
+                    <input type="file" id="_logoFileHidden" accept="image/*" style="display:none" onchange="handleLogoUpload(this)">
+                    ` : ''}
                 </div>
             </div>
             <nav class="sidebar-nav">
@@ -234,7 +355,7 @@ function renderLayout() {
             </nav>
             <div class="sidebar-footer">
                 <div class="user-card">
-                    <div class="user-avatar" style="background:${u.avatar_color}">${u.initials}</div>
+                    ${renderAvatarEl(u.avatar_color, u.initials, u.avatar_image, 36)}
                     <div class="user-info">
                         <div class="name">${u.full_name}</div>
                         <div class="role">${translateRole(u.role)}</div>
@@ -509,9 +630,7 @@ function renderVacationTable(vacations, showActions = false) {
             <tr>
                 <td>
                     <div style="display: flex; align-items: center; gap: var(--space-sm);">
-                        <div class="user-avatar" style="background:${v.employee_avatar_color}; width:32px; height:32px; font-size:0.7rem;">
-                            ${v.employee_initials}
-                        </div>
+                        ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
                         <div>
                             <div style="font-weight: 600; font-size: 0.85rem;">${v.employee_name}</div>
                             <div style="font-size: 0.75rem; color: var(--text-muted);">${v.employee_department}</div>
@@ -885,7 +1004,9 @@ async function loadTeam(container) {
             ${users.map(u => `
             <div class="employee-card" onclick="goToEmployeeDetails(${u.id})" style="cursor:pointer">
                 <div class="employee-card-header">
-                    <div class="employee-avatar-lg" style="background: ${u.avatar_color}">${u.initials}</div>
+                    <div class="employee-avatar-lg" style="background: ${u.avatar_image ? 'transparent' : u.avatar_color}">
+                        ${u.avatar_image ? `<img src="${u.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="">` : u.initials}
+                    </div>
                     <div class="employee-card-info">
                         <h3>${u.full_name}</h3>
                         <p>${u.department} · <span class="role-badge ${u.role}">${translateRole(u.role)}</span></p>
@@ -941,14 +1062,30 @@ async function loadEmployeeDetails(container, userId) {
     // Set calendar filter to this user for the embedded view
     State.calendarUserId = userId;
 
+    const canEdit = State.user.role === 'admin' || State.user.id === userId;
+
     container.innerHTML = `
     <div class="page-enter">
         <div class="page-header">
             <div class="page-header-actions">
-                <div>
-                    <button class="btn btn-secondary btn-sm" onclick="navigateTo('team')" style="margin-bottom: 10px">← Volver al equipo</button>
-                    <h1>👤 Perfil: ${user.full_name}</h1>
-                    <p>${user.department} · ${translateRole(user.role)}</p>
+                <div style="display:flex;align-items:center;gap:var(--space-lg);">
+                    <div>
+                        <button class="btn btn-secondary btn-sm" onclick="navigateTo('team')" style="margin-bottom: 10px">← Volver al equipo</button>
+                        <div style="display:flex;align-items:center;gap:var(--space-md);">
+                            <div class="profile-avatar-wrap" ${canEdit ? `onclick="document.getElementById('_profileAvatarInput').click()" title="Haz clic para cambiar la foto"` : ''} style="${canEdit ? 'cursor:pointer;' : ''}">
+                                <div class="employee-avatar-lg profile-avatar-lg" style="background:${user.avatar_image ? 'transparent' : user.avatar_color}">
+                                    ${user.avatar_image ? `<img src="${user.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="">` : user.initials}
+                                </div>
+                                ${canEdit ? `<div class="profile-avatar-overlay">📷</div>` : ''}
+                            </div>
+                            <div>
+                                <h1 style="margin:0;">${user.full_name}</h1>
+                                <p style="margin:0;">${user.department} · ${translateRole(user.role)}</p>
+                                ${canEdit ? `<span style="font-size:0.75rem;color:var(--text-dim);">Haz clic en la foto para cambiarla</span>` : ''}
+                            </div>
+                        </div>
+                        ${canEdit ? `<input type="file" id="_profileAvatarInput" accept="image/*" style="display:none" onchange="uploadProfileAvatar(this, ${user.id})">` : ''}
+                    </div>
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-primary" onclick="openEditUserModal(${user.id})">Editar Perfil</button>
@@ -1040,6 +1177,9 @@ async function loadEmployees(container) {
     const users = await api('/api/users');
     State.users = users;
 
+    const logo = State.companySettings?.logo_data;
+    const companyName = State.companySettings?.company_name || 'VacationControl';
+
     container.innerHTML = `
     <div class="page-enter">
         <div class="page-header">
@@ -1049,6 +1189,33 @@ async function loadEmployees(container) {
                     <p>Administra empleados y asignación de días</p>
                 </div>
                 <button class="btn btn-primary" onclick="openNewUserModal()">+ Nuevo Empleado</button>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:var(--space-lg);">
+            <div class="panel-header">
+                <h2>🏢 Identidad de Empresa</h2>
+            </div>
+            <div class="panel-body">
+                <div class="company-settings-row">
+                    <div class="company-logo-area" onclick="document.getElementById('_logoUploadInput').click()" title="Haz clic para cambiar el logo">
+                        ${logo
+                            ? `<img src="${logo}" class="company-logo-preview" alt="Logo">`
+                            : `<div class="company-logo-placeholder">🌴</div>`}
+                        <div class="logo-overlay">📷 Cambiar</div>
+                        <input type="file" id="_logoUploadInput" accept="image/*" style="display:none" onchange="handleLogoUpload(this)">
+                    </div>
+                    <div style="flex:1;">
+                        <div class="form-group" style="margin-bottom:var(--space-sm);">
+                            <label>Nombre de la empresa</label>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <input type="text" class="form-input" id="_companyNameInput" value="${companyName}" style="max-width:280px;">
+                                <button class="btn btn-primary btn-sm" onclick="saveCompanyName()">Guardar</button>
+                            </div>
+                        </div>
+                        <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Haz clic en el logo para cambiarlo. El nombre y el logo aparecen en el menú y en la pantalla de inicio de sesión.</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1072,9 +1239,7 @@ async function loadEmployees(container) {
                         <tr>
                             <td>
                                 <div style="display: flex; align-items: center; gap: var(--space-sm);">
-                                    <div class="user-avatar" style="background:${u.avatar_color}; width:32px; height:32px; font-size:0.7rem;">
-                                        ${u.initials}
-                                    </div>
+                                    ${renderAvatarEl(u.avatar_color, u.initials, u.avatar_image, 32)}
                                     <span style="font-weight: 600;">${u.full_name}</span>
                                 </div>
                             </td>
@@ -1318,7 +1483,7 @@ async function loadLateArrivals(container) {
                       ranking.map((r, i) => `
                         <div class="ranking-item ${i === 0 ? 'top-1' : ''}">
                             <div class="ranking-pos">${i + 1}</div>
-                            <div class="user-avatar" style="background:${r.avatar_color}">${r.initials}</div>
+                            ${renderAvatarEl(r.avatar_color, r.initials, r.avatar_image, 36)}
                             <div class="ranking-info">
                                 <div class="name">${r.full_name}</div>
                                 <div class="sub">${r.total_minutes} min. totales</div>
@@ -1382,7 +1547,7 @@ async function loadLateArrivals(container) {
                                 ${isManager ? `
                                 <td>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <div class="user-avatar" style="background:${h.employee_avatar}; width:24px; height:24px; font-size:0.6rem;">${h.employee_initials}</div>
+                                        ${renderAvatarEl(h.employee_avatar, h.employee_initials, h.employee_avatar_image, 24)}
                                         <span>${h.employee_name}</span>
                                     </div>
                                 </td>` : ''}
@@ -1645,6 +1810,8 @@ window.openEditUserModal = async function(userId) {
     ]);
     if (!user) return;
 
+    _pendingAvatarImage = undefined;
+
     openModal(`
     <div class="modal">
         <div class="modal-header">
@@ -1652,6 +1819,17 @@ window.openEditUserModal = async function(userId) {
             <button class="modal-close" onclick="closeModal()">✕</button>
         </div>
         <div class="modal-body">
+            <div class="form-group">
+                <label>Foto de perfil</label>
+                <div class="avatar-upload-area">
+                    <div id="_avatarPreview">${renderAvatarEl(user.avatar_color, user.initials, user.avatar_image, 64)}</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <input type="file" id="_avatarFileInput" accept="image/*" style="display:none" onchange="previewAvatarChange(this)">
+                        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('_avatarFileInput').click()">📷 Cambiar foto</button>
+                        ${user.avatar_image ? `<button class="btn btn-danger btn-sm" onclick="clearAvatarChange()">🗑️ Quitar foto</button>` : ''}
+                    </div>
+                </div>
+            </div>
             <div class="form-row">
                 <div class="form-group">
                     <label>Nombre</label>
@@ -1713,6 +1891,19 @@ window.submitEditUser = async function(userId) {
 
     try {
         await api(`/api/users/${userId}`, { method: 'PUT', body: JSON.stringify(data) });
+
+        if (_pendingAvatarImage !== undefined) {
+            await api(`/api/users/${userId}/avatar`, {
+                method: 'POST',
+                body: JSON.stringify({ avatar_image: _pendingAvatarImage })
+            });
+            if (State.user.id === userId) {
+                const me = await api('/api/me');
+                if (me.authenticated) State.user = me.user;
+                renderApp();
+            }
+        }
+
         closeModal();
         showToast('Empleado actualizado', 'success');
         renderPage();
@@ -1834,12 +2025,14 @@ function getMonthName(month) {
 
 async function init() {
     try {
-        const data = await api('/api/me');
-        if (data.authenticated) {
-            State.user = data.user;
-        }
+        const [meData, settings] = await Promise.all([
+            api('/api/me'),
+            api('/api/settings')
+        ]);
+        if (meData.authenticated) State.user = meData.user;
+        State.companySettings = settings;
     } catch (e) {
-        // Not authenticated
+        // Not authenticated or settings unavailable
     }
     renderApp();
     if (State.user) {

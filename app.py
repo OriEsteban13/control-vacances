@@ -66,6 +66,7 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), nullable=False, default='employee')  # employee, manager, admin
     total_days = db.Column(db.Integer, nullable=False, default=22)
     avatar_color = db.Column(db.String(7), default='#6C5CE7')
+    avatar_image = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     vacations = db.relationship('VacationRequest', backref='employee', lazy=True,
@@ -127,7 +128,8 @@ class User(UserMixin, db.Model):
             'days_used': self.days_used(),
             'days_pending': self.days_pending(),
             'days_remaining': self.days_remaining(),
-            'avatar_color': self.avatar_color
+            'avatar_color': self.avatar_color,
+            'avatar_image': self.avatar_image
         }
 
 
@@ -165,6 +167,7 @@ class VacationRequest(db.Model):
             'employee_initials': self.employee.initials if self.employee else '??',
             'employee_department': self.employee.department if self.employee else '',
             'employee_avatar_color': self.employee.avatar_color if self.employee else '#666',
+            'employee_avatar_image': self.employee.avatar_image if self.employee else None,
             'start_date': self.start_date.isoformat(),
             'end_date': self.end_date.isoformat(),
             'vacation_type': self.vacation_type,
@@ -210,12 +213,19 @@ class LateArrival(db.Model):
             'user_id': self.user_id,
             'employee_name': self.employee.full_name if self.employee else 'Unknown',
             'employee_avatar': self.employee.avatar_color if self.employee else '#666',
+            'employee_avatar_image': self.employee.avatar_image if self.employee else None,
             'employee_initials': self.employee.initials if self.employee else '??',
             'date': self.date.isoformat(),
             'minutes_late': self.minutes_late,
             'reason': self.reason,
             'created_at': self.created_at.isoformat()
         }
+
+
+class CompanySettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    company_name = db.Column(db.String(100), default='VacationControl')
+    logo_data = db.Column(db.Text, nullable=True)
 
 
 @login_manager.user_loader
@@ -777,19 +787,62 @@ def get_late_ranking():
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
         
     ranking = db.session.query(
-        User.id, User.first_name, User.last_name, User.avatar_color,
+        User.id, User.first_name, User.last_name, User.avatar_color, User.avatar_image,
         db.func.count(LateArrival.id).label('total_late'),
         db.func.sum(LateArrival.minutes_late).label('total_minutes')
     ).join(LateArrival, User.id == LateArrival.user_id).group_by(User.id).order_by(db.text('total_late DESC')).all()
-    
+
     return jsonify([{
         'id': r[0],
         'full_name': f"{r[1]} {r[2]}",
         'avatar_color': r[3],
-        'total_late': r[4],
-        'total_minutes': int(r[5] or 0),
+        'avatar_image': r[4],
+        'total_late': r[5],
+        'total_minutes': int(r[6] or 0),
         'initials': f"{r[1][0]}{r[2][0]}".upper()
     } for r in ranking])
+
+
+# ─────────────────────────────────────────────
+# API Routes - Company Settings & Avatars
+# ─────────────────────────────────────────────
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    settings = CompanySettings.query.first()
+    if not settings:
+        return jsonify({'company_name': 'VacationControl', 'logo_data': None})
+    return jsonify({'company_name': settings.company_name, 'logo_data': settings.logo_data})
+
+@app.route('/api/settings', methods=['POST'])
+@login_required
+def update_settings():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json()
+    settings = CompanySettings.query.first()
+    if not settings:
+        settings = CompanySettings()
+        db.session.add(settings)
+    if 'company_name' in data:
+        settings.company_name = data['company_name']
+    if 'logo_data' in data:
+        settings.logo_data = data['logo_data']
+    db.session.commit()
+    return jsonify({'success': True, 'company_name': settings.company_name, 'logo_data': settings.logo_data})
+
+@app.route('/api/users/<int:user_id>/avatar', methods=['POST'])
+@login_required
+def update_user_avatar(user_id):
+    if current_user.role != 'admin' and current_user.id != user_id:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
+    data = request.get_json()
+    user.avatar_image = data.get('avatar_image')
+    db.session.commit()
+    return jsonify({'success': True, 'user': user.to_dict()})
 
 
 # ─────────────────────────────────────────────
@@ -823,6 +876,10 @@ def init_db():
             admin.set_password(admin_password)
             db.session.commit()
             print(f"[init_db] ✅ Admin listo — usuario: admin  contrasena: {admin_password}")
+
+            if CompanySettings.query.count() == 0:
+                db.session.add(CompanySettings())
+                db.session.commit()
 
             if PublicHoliday.query.count() == 0:
                 year = date.today().year
