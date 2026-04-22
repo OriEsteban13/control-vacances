@@ -18,8 +18,12 @@ from flask import Response
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'vacation-control-secret-key-2026')
 
-# On Render the persistent disk is mounted at /data; fall back to local instance/
-_db_dir = '/data' if os.path.isdir('/data') else os.path.join(os.path.dirname(__file__), 'instance')
+if os.path.isdir('/data'):
+    _db_dir = '/data'           # Render paid disk
+elif os.environ.get('RENDER'):
+    _db_dir = '/tmp'            # Render free tier (ephemeral but writable)
+else:
+    _db_dir = os.path.join(os.path.dirname(__file__), 'instance')  # local dev
 os.makedirs(_db_dir, exist_ok=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{_db_dir}/vacations.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False

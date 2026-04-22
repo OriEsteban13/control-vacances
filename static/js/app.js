@@ -120,20 +120,6 @@ function renderLogin() {
                     Iniciar Sesión
                 </button>
             </form>
-            <div class="credential-cards">
-                <div class="credential-card">
-                    <div class="cred-role">Admin</div>
-                    <div class="cred-user">admin / admin</div>
-                </div>
-                <div class="credential-card">
-                    <div class="cred-role">Manager</div>
-                    <div class="cred-user">manager / manager</div>
-                </div>
-                <div class="credential-card">
-                    <div class="cred-role">Empleado</div>
-                    <div class="cred-user">javier / password</div>
-                </div>
-            </div>
         </div>
     </div>`;
 }
