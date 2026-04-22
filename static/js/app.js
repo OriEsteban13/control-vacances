@@ -975,7 +975,7 @@ async function loadEmployeeDetails(container, userId) {
             </div>
         </div>
 
-        <div style="display:grid; grid-template-columns: 1fr 1.5fr; gap: 24px;">
+        <div class="employee-detail-grid">
             <div class="panel">
                 <div class="panel-header">
                     <h2>Historial de Solicitudes</h2>
