@@ -27,6 +27,24 @@ const State = {
 };
 
 let _pendingAvatarImage = undefined;
+let _csrfToken = null;
+
+// ─────────────────────────────────────────────
+// Security helpers
+// ─────────────────────────────────────────────
+
+/** HTML-escape a value to prevent XSS when inserting into innerHTML */
+function esc(val) {
+    const d = document.createElement('div');
+    d.textContent = val == null ? '' : String(val);
+    return d.innerHTML;
+}
+
+/** Sanitize with DOMPurify if available, fallback to esc() */
+function safe(val) {
+    if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(val == null ? '' : String(val));
+    return esc(val);
+}
 
 // ─────────────────────────────────────────────
 // API
@@ -34,11 +52,13 @@ let _pendingAvatarImage = undefined;
 
 async function api(url, options = {}) {
     let res;
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(_csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}),
+        ...options.headers,
+    };
     try {
-        res = await fetch(url, {
-            headers: { 'Content-Type': 'application/json', ...options.headers },
-            ...options,
-        });
+        res = await fetch(url, { headers, ...options });
     } catch (e) {
         throw new Error('No se puede conectar al servidor. Comprueba tu conexión.');
     }
@@ -214,6 +234,9 @@ function renderApp() {
     if (!State.user) {
         app.innerHTML = renderLogin();
         bindLoginEvents();
+    } else if (State.user.must_change_password) {
+        app.innerHTML = renderForceChangePassword();
+        bindForceChangeEvents();
     } else {
         app.innerHTML = renderLayout();
         bindSidebarEvents();
@@ -225,7 +248,7 @@ function renderApp() {
 
 function renderLogin() {
     const logo = State.companySettings?.logo_data;
-    const name = State.companySettings?.company_name || 'VacationControl';
+    const name = esc(State.companySettings?.company_name || 'VacationControl');
     return `
     <div class="login-container">
         <div class="login-card">
@@ -235,22 +258,71 @@ function renderLogin() {
                 <p>Gestión inteligente de vacaciones</p>
             </div>
             <div class="login-error" id="loginError"></div>
-            <form id="loginForm">
+            <div id="loginView">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Usuario o email</label>
+                        <input type="text" id="username" class="form-input" placeholder="Tu usuario o email" autocomplete="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Contraseña</label>
+                        <input type="password" id="password" class="form-input" placeholder="Tu contraseña" autocomplete="current-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full" id="loginBtn">Iniciar Sesión</button>
+                </form>
+                <p style="margin-top:12px;text-align:center;">
+                    <button class="btn-link" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</button>
+                </p>
+            </div>
+            <div id="forgotView" style="display:none;">
+                <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">
+                    Escribe tu email y te enviaremos un enlace para restablecer tu contraseña.
+                </p>
                 <div class="form-group">
-                    <label for="username">Usuario o email</label>
-                    <input type="text" id="username" class="form-input" placeholder="Tu usuario o email" autocomplete="username" required>
+                    <label>Email</label>
+                    <input type="email" id="forgotEmail" class="form-input" placeholder="tu@empresa.com">
                 </div>
-                <div class="form-group">
-                    <label for="password">Contraseña</label>
-                    <input type="password" id="password" class="form-input" placeholder="Tu contraseña" autocomplete="current-password" required>
-                </div>
-                <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
-                    Iniciar Sesión
-                </button>
-            </form>
-            <p style="margin-top: 16px; font-size: 0.78rem; color: var(--text-dim); text-align: center;">
+                <button class="btn btn-primary btn-full" id="forgotBtn" onclick="submitForgotPassword()">Enviar enlace</button>
+                <p style="margin-top:12px;text-align:center;">
+                    <button class="btn-link" onclick="showLoginForm()">← Volver al inicio de sesión</button>
+                </p>
+            </div>
+            <p style="margin-top: 14px; font-size: 0.78rem; color: var(--text-dim); text-align: center;">
                 Si el servidor acaba de despertar, el primer inicio de sesión puede tardar unos segundos.
             </p>
+            <p style="margin-top:8px;font-size:0.72rem;color:var(--text-dim);text-align:center;">
+                <a href="/privacy" target="_blank" style="color:var(--text-dim);">Privacidad</a> ·
+                <a href="/legal" target="_blank" style="color:var(--text-dim);">Aviso legal</a>
+            </p>
+        </div>
+    </div>`;
+}
+
+function renderForceChangePassword() {
+    const name = esc(State.companySettings?.company_name || 'VacationControl');
+    const logo = State.companySettings?.logo_data;
+    return `
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                ${logo ? `<img src="${logo}" class="login-logo-img" alt="Logo">` : '<div class="logo-icon">🌴</div>'}
+                <h1>${name}</h1>
+                <p>Debes cambiar tu contraseña antes de continuar</p>
+            </div>
+            <div class="login-error" id="cpError"></div>
+            <div class="form-group">
+                <label>Contraseña actual</label>
+                <input type="password" id="cpCurrent" class="form-input" placeholder="Contraseña temporal recibida">
+            </div>
+            <div class="form-group">
+                <label>Nueva contraseña (mín. 8 caracteres)</label>
+                <input type="password" id="cpNew" class="form-input" placeholder="Nueva contraseña">
+            </div>
+            <div class="form-group">
+                <label>Confirmar nueva contraseña</label>
+                <input type="password" id="cpConfirm" class="form-input" placeholder="Repite la nueva contraseña">
+            </div>
+            <button class="btn btn-primary btn-full" id="cpBtn" onclick="submitForceChange()">Cambiar contraseña</button>
         </div>
     </div>`;
 }
@@ -273,9 +345,12 @@ function bindLoginEvents() {
                 method: 'POST',
                 body: JSON.stringify({ username, password })
             });
+            _csrfToken = data.csrf_token;
             State.user = data.user;
             renderApp();
-            showToast(`¡Bienvenido, ${State.user.first_name}!`, 'success');
+            if (!State.user.must_change_password) {
+                showToast(`¡Bienvenido, ${esc(State.user.first_name)}!`, 'success');
+            }
         } catch (err) {
             errorEl.textContent = err.message;
             errorEl.classList.add('visible');
@@ -284,6 +359,66 @@ function bindLoginEvents() {
         }
     });
 }
+
+function bindForceChangeEvents() { /* events bound inline via onclick */ }
+
+window.showForgotPassword = function() {
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('forgotView').style.display = '';
+    document.getElementById('loginError').classList.remove('visible');
+};
+
+window.showLoginForm = function() {
+    document.getElementById('forgotView').style.display = 'none';
+    document.getElementById('loginView').style.display = '';
+    document.getElementById('loginError').classList.remove('visible');
+};
+
+window.submitForgotPassword = async function() {
+    const email = document.getElementById('forgotEmail').value.trim();
+    const btn = document.getElementById('forgotBtn');
+    const errorEl = document.getElementById('loginError');
+    if (!email) { errorEl.textContent = 'Escribe tu email'; errorEl.classList.add('visible'); return; }
+    btn.textContent = 'Enviando...'; btn.disabled = true;
+    try {
+        const res = await api('/api/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+        errorEl.classList.remove('visible');
+        showToast(res.message, 'success');
+        showLoginForm();
+    } catch (err) {
+        errorEl.textContent = err.message; errorEl.classList.add('visible');
+    } finally {
+        btn.textContent = 'Enviar enlace'; btn.disabled = false;
+    }
+};
+
+window.submitForceChange = async function() {
+    const current = document.getElementById('cpCurrent').value;
+    const newPw = document.getElementById('cpNew').value;
+    const confirm = document.getElementById('cpConfirm').value;
+    const errorEl = document.getElementById('cpError');
+    const btn = document.getElementById('cpBtn');
+
+    if (newPw !== confirm) {
+        errorEl.textContent = 'Las contraseñas no coinciden'; errorEl.classList.add('visible'); return;
+    }
+    if (newPw.length < 8) {
+        errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres'; errorEl.classList.add('visible'); return;
+    }
+    btn.textContent = 'Guardando...'; btn.disabled = true;
+    try {
+        const data = await api('/api/change-password', {
+            method: 'POST',
+            body: JSON.stringify({ current_password: current, new_password: newPw })
+        });
+        State.user = data.user;
+        showToast('Contraseña actualizada. ¡Bienvenido!', 'success');
+        renderApp();
+    } catch (err) {
+        errorEl.textContent = err.message; errorEl.classList.add('visible');
+        btn.textContent = 'Cambiar contraseña'; btn.disabled = false;
+    }
+};
 
 // ─── Layout ────────────────────────────
 
@@ -357,7 +492,7 @@ function renderLayout() {
                 <div class="user-card">
                     ${renderAvatarEl(u.avatar_color, u.initials, u.avatar_image, 36)}
                     <div class="user-info">
-                        <div class="name">${u.full_name}</div>
+                        <div class="name">${esc(u.full_name)}</div>
                         <div class="role">${translateRole(u.role)}</div>
                     </div>
                     <button class="logout-btn" id="logoutBtn" title="Cerrar sesión">🚪</button>
@@ -469,7 +604,7 @@ async function loadDashboard(container) {
     container.innerHTML = `
     <div class="page-enter">
         <div class="page-header">
-            <h1>¡Hola, ${u.first_name}! 👋</h1>
+            <h1>¡Hola, ${esc(u.first_name)}! 👋</h1>
             <p>Resumen de vacaciones para ${stats.year}</p>
         </div>
 
@@ -632,8 +767,8 @@ function renderVacationTable(vacations, showActions = false) {
                     <div style="display: flex; align-items: center; gap: var(--space-sm);">
                         ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
                         <div>
-                            <div style="font-weight: 600; font-size: 0.85rem;">${v.employee_name}</div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">${v.employee_department}</div>
+                            <div style="font-weight: 600; font-size: 0.85rem;">${esc(v.employee_name)}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">${esc(v.employee_department)}</div>
                         </div>
                     </div>
                 </td>
@@ -798,7 +933,7 @@ function renderCalendarGrid(calData) {
         html += `<div class="${classes}">
             <div class="day-number">${d}</div>
             <div class="day-events">
-                ${dayHolidays.map(h => `<div class="day-holiday" title="${h.name}">🎉 ${h.name}</div>`).join('')}
+                ${dayHolidays.map(h => `<div class="day-holiday" title="${esc(h.name)}">🎉 ${esc(h.name)}</div>`).join('')}
                 ${dayVacations.map(v => `
                     <div class="day-event ${v.status}" title="${v.employee_name}: ${translateStatus(v.status)}">
                         ${v.employee_initials} ${v.employee_name.split(' ')[0]}
@@ -908,7 +1043,7 @@ function renderMyVacationsTable(vacations) {
                 <td style="font-weight: 600;">${formatDate(v.start_date)} — ${formatDate(v.end_date)}</td>
                 <td><span class="type-badge">${translateType(v.vacation_type)}</span></td>
                 <td><span style="font-weight: 700;">${v.business_days}</span></td>
-                <td style="color: var(--text-muted); font-size: 0.85rem;">${v.reason || '—'}</td>
+                <td style="color: var(--text-muted); font-size: 0.85rem;">${esc(v.reason) || '—'}</td>
                 <td><span class="status-badge ${v.status}">${translateStatus(v.status)}</span></td>
                 <td>
                     ${v.status === 'pending' ? 
@@ -1008,8 +1143,8 @@ async function loadTeam(container) {
                         ${u.avatar_image ? `<img src="${u.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="">` : u.initials}
                     </div>
                     <div class="employee-card-info">
-                        <h3>${u.full_name}</h3>
-                        <p>${u.department} · <span class="role-badge ${u.role}">${translateRole(u.role)}</span></p>
+                        <h3>${esc(u.full_name)}</h3>
+                        <p>${esc(u.department)} · <span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></p>
                     </div>
                 </div>
                 <div class="employee-card-stats">
@@ -1079,7 +1214,7 @@ async function loadEmployeeDetails(container, userId) {
                                 ${canEdit ? `<div class="profile-avatar-overlay">📷</div>` : ''}
                             </div>
                             <div>
-                                <h1 style="margin:0;">${user.full_name}</h1>
+                                <h1 style="margin:0;">${esc(user.full_name)}</h1>
                                 <p style="margin:0;">${user.department} · ${translateRole(user.role)}</p>
                                 ${canEdit ? `<span style="font-size:0.75rem;color:var(--text-dim);">Haz clic en la foto para cambiarla</span>` : ''}
                             </div>
@@ -1240,12 +1375,12 @@ async function loadEmployees(container) {
                             <td>
                                 <div style="display: flex; align-items: center; gap: var(--space-sm);">
                                     ${renderAvatarEl(u.avatar_color, u.initials, u.avatar_image, 32)}
-                                    <span style="font-weight: 600;">${u.full_name}</span>
+                                    <span style="font-weight: 600;">${esc(u.full_name)}</span>
                                 </div>
                             </td>
-                            <td style="color: var(--text-muted);">${u.email}</td>
-                            <td>${u.department}</td>
-                            <td><span class="role-badge ${u.role}">${translateRole(u.role)}</span></td>
+                            <td style="color: var(--text-muted);">${esc(u.email)}</td>
+                            <td>${esc(u.department)}</td>
+                            <td><span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></td>
                             <td style="font-weight: 700;">${u.total_days}</td>
                             <td style="color: var(--color-info); font-weight: 600;">${u.days_used}</td>
                             <td style="color: var(--color-success); font-weight: 600;">${u.days_remaining}</td>
@@ -1292,7 +1427,7 @@ async function loadHolidays(container) {
                         <div class="holiday-item">
                             <div class="holiday-info">
                                 <span class="holiday-date">${formatDate(h.date)}</span>
-                                <span class="holiday-name">${h.name}</span>
+                                <span class="holiday-name">${esc(h.name)}</span>
                             </div>
                             <button class="btn btn-danger btn-sm btn-icon" onclick="deleteHoliday(${h.id})">🗑️</button>
                         </div>`).join('')}
@@ -1336,8 +1471,8 @@ async function loadDepartments(container) {
                     <tbody>
                         ${depts.map(d => `
                         <tr>
-                            <td style="font-weight: 600;">${d.name}</td>
-                            <td style="color: var(--text-muted);">${d.description || '—'}</td>
+                            <td style="font-weight: 600;">${esc(d.name)}</td>
+                            <td style="color: var(--text-muted);">${esc(d.description) || '—'}</td>
                             <td>
                                 <div class="action-btns">
                                     <button class="btn btn-secondary btn-sm" onclick="openEditDeptModal(${d.id})">✏️</button>
@@ -1485,7 +1620,7 @@ async function loadLateArrivals(container) {
                             <div class="ranking-pos">${i + 1}</div>
                             ${renderAvatarEl(r.avatar_color, r.initials, r.avatar_image, 36)}
                             <div class="ranking-info">
-                                <div class="name">${r.full_name}</div>
+                                <div class="name">${esc(r.full_name)}</div>
                                 <div class="sub">${r.total_minutes} min. totales</div>
                             </div>
                             <div class="ranking-value">${r.total_late} <span>veces</span></div>
@@ -1548,12 +1683,12 @@ async function loadLateArrivals(container) {
                                 <td>
                                     <div style="display: flex; align-items: center; gap: 8px;">
                                         ${renderAvatarEl(h.employee_avatar, h.employee_initials, h.employee_avatar_image, 24)}
-                                        <span>${h.employee_name}</span>
+                                        <span>${esc(h.employee_name)}</span>
                                     </div>
                                 </td>` : ''}
                                 <td style="font-weight: 600;">${formatDate(h.date)}</td>
                                 <td><span class="status-badge danger">${h.minutes_late} min</span></td>
-                                <td style="color: var(--text-muted);">${h.reason || '—'}</td>
+                                <td style="color: var(--text-muted);">${esc(h.reason) || '—'}</td>
                                 ${isManager ? `<td><button class="btn btn-danger btn-sm" onclick="deleteLateArrival(${h.id})">🗑️</button></td>` : ''}
                             </tr>
                         `).join('')}
@@ -2029,15 +2164,75 @@ async function init() {
             api('/api/me'),
             api('/api/settings')
         ]);
-        if (meData.authenticated) State.user = meData.user;
+        if (meData.authenticated) {
+            State.user = meData.user;
+            _csrfToken = meData.csrf_token;
+        }
         State.companySettings = settings;
     } catch (e) {
         // Not authenticated or settings unavailable
     }
+
+    // Handle /reset-password?token=... deep link
+    const params = new URLSearchParams(window.location.search);
+    const resetToken = params.get('token');
+    if (resetToken && window.location.pathname === '/reset-password') {
+        renderResetPasswordPage(resetToken);
+        return;
+    }
+
     renderApp();
-    if (State.user) {
+    if (State.user && !State.user.must_change_password) {
         renderPage();
     }
 }
+
+function renderResetPasswordPage(token) {
+    const app = document.getElementById('app');
+    const logo = State.companySettings?.logo_data;
+    const name = esc(State.companySettings?.company_name || 'VacationControl');
+    app.innerHTML = `
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                ${logo ? `<img src="${logo}" class="login-logo-img" alt="Logo">` : '<div class="logo-icon">🌴</div>'}
+                <h1>${name}</h1>
+                <p>Establece tu nueva contraseña</p>
+            </div>
+            <div class="login-error" id="rpError"></div>
+            <div class="form-group">
+                <label>Nueva contraseña (mín. 8 caracteres)</label>
+                <input type="password" id="rpNew" class="form-input" placeholder="Nueva contraseña">
+            </div>
+            <div class="form-group">
+                <label>Confirmar contraseña</label>
+                <input type="password" id="rpConfirm" class="form-input" placeholder="Repite la contraseña">
+            </div>
+            <button class="btn btn-primary btn-full" id="rpBtn" onclick="submitResetPassword('${esc(token)}')">Guardar contraseña</button>
+        </div>
+    </div>`;
+}
+
+window.submitResetPassword = async function(token) {
+    const newPw = document.getElementById('rpNew').value;
+    const confirm = document.getElementById('rpConfirm').value;
+    const errorEl = document.getElementById('rpError');
+    const btn = document.getElementById('rpBtn');
+    if (newPw !== confirm) {
+        errorEl.textContent = 'Las contraseñas no coinciden'; errorEl.classList.add('visible'); return;
+    }
+    if (newPw.length < 8) {
+        errorEl.textContent = 'Mínimo 8 caracteres'; errorEl.classList.add('visible'); return;
+    }
+    btn.textContent = 'Guardando...'; btn.disabled = true;
+    try {
+        await api('/api/reset-password', { method: 'POST', body: JSON.stringify({ token, password: newPw }) });
+        showToast('Contraseña actualizada. Inicia sesión.', 'success');
+        window.location.href = '/login';
+    } catch (err) {
+        errorEl.textContent = err.message; errorEl.classList.add('visible');
+        btn.textContent = 'Guardar contraseña'; btn.disabled = false;
+    }
+};
 
 document.addEventListener('DOMContentLoaded', init);

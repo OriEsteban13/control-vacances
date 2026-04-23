@@ -9,16 +9,31 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from dateutil import parser as date_parser
+from functools import wraps
 import json
 import os
 import io
 import csv
+import secrets
+import hashlib
 from flask import Response
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_talisman import Talisman
+from flask_mail import Mail, Message
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'vacation-control-secret-key-2026')
 
-# Secure cookie settings for HTTPS (Render production)
+# ─── Secret key — REQUIRED, no hardcoded fallback ─────────────────────────────
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set. "
+        "Generate one: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+app.config['SECRET_KEY'] = _secret_key
+
+# ─── Session cookies ───────────────────────────────────────────────────────────
 if os.environ.get('RENDER'):
     app.config['SESSION_COOKIE_SECURE'] = True
     app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -27,17 +42,64 @@ if os.environ.get('RENDER'):
     app.config['REMEMBER_COOKIE_HTTPONLY'] = True
     app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 
-if os.environ.get('RENDER'):
-    _db_dir = '/tmp'
+# ─── Database ──────────────────────────────────────────────────────────────────
+_database_url = os.environ.get('DATABASE_URL')
+if _database_url:
+    if _database_url.startswith('postgres://'):
+        _database_url = _database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = _database_url
+    _db_dir = None
 else:
-    _db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
-os.makedirs(_db_dir, exist_ok=True)
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{_db_dir}/vacations.db'
+    _db_dir = '/tmp' if os.environ.get('RENDER') else os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'instance'
+    )
+    os.makedirs(_db_dir, exist_ok=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{_db_dir}/vacations.db'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# ─── Email ─────────────────────────────────────────────────────────────────────
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@vacationcontrol.com')
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login_page'
+mail = Mail(app)
+
+# ─── Rate limiter ──────────────────────────────────────────────────────────────
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://"
+)
+
+# ─── Security headers (HTTPS / Render only) ───────────────────────────────────
+if os.environ.get('RENDER'):
+    _csp = {
+        'default-src': "'self'",
+        'script-src': ["'self'", "'unsafe-inline'"],
+        'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        'font-src': ["'self'", "https://fonts.gstatic.com"],
+        'img-src': ["'self'", "data:"],
+        'connect-src': "'self'",
+    }
+    Talisman(
+        app,
+        force_https=True,
+        strict_transport_security=True,
+        strict_transport_security_max_age=31536000,
+        content_security_policy=_csp,
+        referrer_policy='strict-origin-when-cross-origin',
+        x_content_type_options=True,
+        x_xss_protection=False,
+    )
+
 
 # ─────────────────────────────────────────────
 # Models
@@ -49,11 +111,8 @@ class Department(db.Model):
     description = db.Column(db.String(255), nullable=True)
 
     def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'description': self.description
-        }
+        return {'id': self.id, 'name': self.name, 'description': self.description}
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -63,10 +122,13 @@ class User(UserMixin, db.Model):
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
     department = db.Column(db.String(100), nullable=False, default='General')
-    role = db.Column(db.String(20), nullable=False, default='employee')  # employee, manager, admin
+    role = db.Column(db.String(20), nullable=False, default='employee')
     total_days = db.Column(db.Integer, nullable=False, default=22)
     avatar_color = db.Column(db.String(7), default='#6C5CE7')
     avatar_image = db.Column(db.Text, nullable=True)
+    must_change_password = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     vacations = db.relationship('VacationRequest', backref='employee', lazy=True,
@@ -89,9 +151,7 @@ class User(UserMixin, db.Model):
     def days_used(self, year=None):
         if year is None:
             year = date.today().year
-        approved = VacationRequest.query.filter_by(
-            user_id=self.id, status='approved'
-        ).all()
+        approved = VacationRequest.query.filter_by(user_id=self.id, status='approved').all()
         total = 0
         for v in approved:
             if v.start_date.year == year or v.end_date.year == year:
@@ -101,9 +161,7 @@ class User(UserMixin, db.Model):
     def days_pending(self, year=None):
         if year is None:
             year = date.today().year
-        pending = VacationRequest.query.filter_by(
-            user_id=self.id, status='pending'
-        ).all()
+        pending = VacationRequest.query.filter_by(user_id=self.id, status='pending').all()
         total = 0
         for v in pending:
             if v.start_date.year == year or v.end_date.year == year:
@@ -129,7 +187,8 @@ class User(UserMixin, db.Model):
             'days_pending': self.days_pending(),
             'days_remaining': self.days_remaining(),
             'avatar_color': self.avatar_color,
-            'avatar_image': self.avatar_image
+            'avatar_image': self.avatar_image,
+            'must_change_password': self.must_change_password,
         }
 
 
@@ -140,7 +199,7 @@ class VacationRequest(db.Model):
     end_date = db.Column(db.Date, nullable=False)
     vacation_type = db.Column(db.String(50), nullable=False, default='vacaciones')
     reason = db.Column(db.Text, default='')
-    status = db.Column(db.String(20), nullable=False, default='pending')  # pending, approved, rejected
+    status = db.Column(db.String(20), nullable=False, default='pending')
     reviewed_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     review_comment = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -150,11 +209,10 @@ class VacationRequest(db.Model):
 
     @property
     def business_days(self):
-        """Calculate business days between start and end date"""
         days = 0
         current = self.start_date
         while current <= self.end_date:
-            if current.weekday() < 5:  # Monday to Friday
+            if current.weekday() < 5:
                 days += 1
             current += timedelta(days=1)
         return days
@@ -178,7 +236,7 @@ class VacationRequest(db.Model):
             'reviewer_name': self.reviewer.full_name if self.reviewer else None,
             'review_comment': self.review_comment,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
         }
 
 
@@ -189,12 +247,7 @@ class PublicHoliday(db.Model):
     year = db.Column(db.Integer, nullable=False)
 
     def to_dict(self):
-        return {
-            'id': self.id,
-            'date': self.date.isoformat(),
-            'name': self.name,
-            'year': self.year
-        }
+        return {'id': self.id, 'date': self.date.isoformat(), 'name': self.name, 'year': self.year}
 
 
 class LateArrival(db.Model):
@@ -218,7 +271,7 @@ class LateArrival(db.Model):
             'date': self.date.isoformat(),
             'minutes_late': self.minutes_late,
             'reason': self.reason,
-            'created_at': self.created_at.isoformat()
+            'created_at': self.created_at.isoformat(),
         }
 
 
@@ -228,21 +281,123 @@ class CompanySettings(db.Model):
     logo_data = db.Column(db.Text, nullable=True)
 
 
+class PasswordResetToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User')
+
+
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    actor_id = db.Column(db.Integer, nullable=True)
+    actor_username = db.Column(db.String(80), nullable=True)
+    action = db.Column(db.String(100), nullable=False)
+    target_type = db.Column(db.String(50), nullable=True)
+    target_id = db.Column(db.Integer, nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'actor_id': self.actor_id,
+            'actor_username': self.actor_username,
+            'action': self.action,
+            'target_type': self.target_type,
+            'target_id': self.target_id,
+            'details': self.details,
+            'ip_address': self.ip_address,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 @login_manager.user_loader
 def load_user(user_id):
     try:
-        return db.session.get(User, int(user_id))
+        u = db.session.get(User, int(user_id))
+        return u if (u and not u.is_deleted) else None
     except Exception:
         return None
 
 
 # ─────────────────────────────────────────────
-# Routes - Pages
+# Helpers
+# ─────────────────────────────────────────────
+
+def get_client_ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+
+
+def log_audit(action, target_type=None, target_id=None, details=None):
+    try:
+        entry = AuditLog(
+            actor_id=current_user.id if current_user.is_authenticated else None,
+            actor_username=current_user.username if current_user.is_authenticated else None,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            details=details,
+            ip_address=get_client_ip(),
+        )
+        db.session.add(entry)
+        db.session.commit()
+    except Exception:
+        pass
+
+
+def send_email(to, subject, body):
+    if not app.config.get('MAIL_USERNAME'):
+        print(f"[EMAIL — no SMTP configured] To: {to}\nSubject: {subject}\n{body}")
+        return True
+    try:
+        msg = Message(subject=subject, recipients=[to], body=body)
+        mail.send(msg)
+        return True
+    except Exception as e:
+        print(f"[EMAIL ERROR] {e}")
+        return False
+
+
+def _generate_csrf():
+    token = secrets.token_hex(32)
+    session['csrf_token'] = token
+    return token
+
+
+# ─── CSRF validation on all state-changing requests ───────────────────────────
+_CSRF_EXEMPT = {'/api/login', '/api/forgot-password', '/api/reset-password', '/health'}
+
+@app.before_request
+def _check_csrf():
+    if request.method not in ('POST', 'PUT', 'DELETE', 'PATCH'):
+        return
+    if request.path in _CSRF_EXEMPT:
+        return
+    if not current_user.is_authenticated:
+        return
+    client_token = request.headers.get('X-CSRF-Token', '')
+    stored = session.get('csrf_token', '')
+    if not stored or not secrets.compare_digest(client_token, stored):
+        return jsonify({'success': False, 'error': 'Token CSRF inválido. Recarga la página.'}), 403
+
+
+# ─────────────────────────────────────────────
+# Routes — Pages
 # ─────────────────────────────────────────────
 
 @app.route('/health')
 def health():
     return jsonify({'status': 'ok'})
+
+@app.route('/robots.txt')
+def robots_txt():
+    return ("User-agent: *\nDisallow: /\n", 200, {'Content-Type': 'text/plain'})
 
 @app.route('/')
 def index():
@@ -259,47 +414,145 @@ def login_page():
 def dashboard():
     return render_template('index.html')
 
+@app.route('/reset-password')
+def reset_password_page():
+    return render_template('index.html')
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+@app.route('/legal')
+def legal():
+    return render_template('legal.html')
+
 
 # ─────────────────────────────────────────────
-# API Routes - Auth
+# API Routes — Auth
 # ─────────────────────────────────────────────
 
 @app.route('/api/login', methods=['POST'])
+@limiter.limit("5 per 15 minutes")
 def api_login():
     data = request.get_json(silent=True) or {}
-    login_identifier = data.get('username')
+    login_identifier = data.get('username', '').strip()
     user = User.query.filter(
-        db.or_(User.username == login_identifier, User.email == login_identifier)
+        db.or_(User.username == login_identifier, User.email == login_identifier),
+        User.is_deleted == False
     ).first()
-    
-    if user and user.check_password(data.get('password')):
+
+    if user and user.check_password(data.get('password', '')):
         login_user(user, remember=True)
-        return jsonify({'success': True, 'user': user.to_dict()})
-        
+        csrf_token = _generate_csrf()
+        log_audit('login', 'user', user.id)
+        return jsonify({'success': True, 'user': user.to_dict(), 'csrf_token': csrf_token})
+
+    log_audit('login_failed', 'user', None, f"identifier={login_identifier}")
     return jsonify({'success': False, 'error': 'Usuario o contraseña incorrectos'}), 401
+
 
 @app.route('/api/logout', methods=['POST'])
 @login_required
 def api_logout():
+    log_audit('logout', 'user', current_user.id)
     logout_user()
+    session.clear()
     return jsonify({'success': True})
+
 
 @app.route('/api/me')
 def api_me():
     if current_user.is_authenticated:
-        return jsonify({'authenticated': True, 'user': current_user.to_dict()})
+        csrf_token = session.get('csrf_token') or _generate_csrf()
+        return jsonify({'authenticated': True, 'user': current_user.to_dict(), 'csrf_token': csrf_token})
     return jsonify({'authenticated': False})
 
 
+@app.route('/api/forgot-password', methods=['POST'])
+@limiter.limit("3 per hour")
+def forgot_password():
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip().lower()
+    user = User.query.filter(
+        db.func.lower(User.email) == email,
+        User.is_deleted == False
+    ).first()
+    if user:
+        # Invalidate previous tokens
+        PasswordResetToken.query.filter_by(user_id=user.id, used=False).update({'used': True})
+        db.session.flush()
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        reset_record = PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+        )
+        db.session.add(reset_record)
+        db.session.commit()
+        base = request.host_url.rstrip('/')
+        reset_url = f"{base}/reset-password?token={raw_token}"
+        send_email(
+            user.email,
+            "Recuperación de contraseña — VacationControl",
+            f"Hola {user.first_name},\n\n"
+            f"Has solicitado restablecer tu contraseña.\n\n"
+            f"Haz clic en este enlace (válido 1 hora):\n{reset_url}\n\n"
+            f"Si no has solicitado esto, ignora este correo.\n\n"
+            f"— VacationControl",
+        )
+    # Always return success to prevent user enumeration
+    return jsonify({'success': True, 'message': 'Si el email existe recibirás un enlace de recuperación en breve.'})
+
+
+@app.route('/api/reset-password', methods=['POST'])
+@limiter.limit("5 per hour")
+def reset_password():
+    data = request.get_json(silent=True) or {}
+    raw_token = data.get('token', '')
+    new_password = data.get('password', '')
+
+    if len(new_password) < 8:
+        return jsonify({'success': False, 'error': 'La contraseña debe tener al menos 8 caracteres'}), 400
+
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    record = PasswordResetToken.query.filter_by(token_hash=token_hash, used=False).first()
+
+    if not record or record.expires_at < datetime.utcnow():
+        return jsonify({'success': False, 'error': 'Enlace inválido o caducado'}), 400
+
+    record.used = True
+    record.user.set_password(new_password)
+    record.user.must_change_password = False
+    db.session.commit()
+    log_audit('reset_password', 'user', record.user_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/change-password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.get_json(silent=True) or {}
+    if not current_user.check_password(data.get('current_password', '')):
+        return jsonify({'success': False, 'error': 'Contraseña actual incorrecta'}), 400
+    new_password = data.get('new_password', '')
+    if len(new_password) < 8:
+        return jsonify({'success': False, 'error': 'La nueva contraseña debe tener al menos 8 caracteres'}), 400
+    current_user.set_password(new_password)
+    current_user.must_change_password = False
+    db.session.commit()
+    log_audit('change_password', 'user', current_user.id)
+    return jsonify({'success': True, 'user': current_user.to_dict()})
+
+
 # ─────────────────────────────────────────────
-# API Routes - Vacations
+# API Routes — Vacations
 # ─────────────────────────────────────────────
 
 @app.route('/api/vacations', methods=['GET'])
 @login_required
 def get_vacations():
     year = request.args.get('year', date.today().year, type=int)
-    
     if current_user.role in ['admin', 'manager']:
         vacations = VacationRequest.query.filter(
             db.extract('year', VacationRequest.start_date) == year
@@ -308,14 +561,13 @@ def get_vacations():
         vacations = VacationRequest.query.filter_by(user_id=current_user.id).filter(
             db.extract('year', VacationRequest.start_date) == year
         ).order_by(VacationRequest.created_at.desc()).all()
-
     return jsonify([v.to_dict() for v in vacations])
+
 
 @app.route('/api/vacations/export', methods=['GET'])
 @login_required
 def export_vacations():
     year = request.args.get('year', date.today().year, type=int)
-    
     if current_user.role in ['admin', 'manager']:
         vacations = VacationRequest.query.filter(
             db.extract('year', VacationRequest.start_date) == year
@@ -327,25 +579,21 @@ def export_vacations():
 
     si_output = io.StringIO()
     writer = csv.writer(si_output)
-    writer.writerow(['ID', 'Empleado', 'Departamento', 'Fecha Inicio', 'Fecha Fin', 'Tipo', 'Dias Laborables', 'Estado', 'Motivo'])
-    
+    writer.writerow(['ID', 'Empleado', 'Departamento', 'Fecha Inicio', 'Fecha Fin',
+                     'Tipo', 'Dias Laborables', 'Estado', 'Motivo'])
     for v in vacations:
         writer.writerow([
             v.id,
             v.employee.full_name if v.employee else 'Desconocido',
             v.employee.department if v.employee else '',
-            v.start_date.isoformat(),
-            v.end_date.isoformat(),
-            v.vacation_type,
-            v.business_days,
-            v.status,
-            v.reason
+            v.start_date.isoformat(), v.end_date.isoformat(),
+            v.vacation_type, v.business_days, v.status, v.reason,
         ])
-        
     output = make_response(si_output.getvalue())
     output.headers["Content-Disposition"] = f"attachment; filename=vacaciones_{year}.csv"
     output.headers["Content-type"] = "text/csv"
     return output
+
 
 @app.route('/api/vacations', methods=['POST'])
 @login_required
@@ -359,7 +607,6 @@ def create_vacation():
 
     if start > end:
         return jsonify({'success': False, 'error': 'La fecha de inicio debe ser anterior a la de fin'}), 400
-
     if start < date.today():
         return jsonify({'success': False, 'error': 'No se pueden solicitar vacaciones en fechas pasadas'}), 400
 
@@ -368,31 +615,29 @@ def create_vacation():
         start_date=start,
         end_date=end,
         vacation_type=data.get('vacation_type', 'vacaciones'),
-        reason=data.get('reason', '')
+        reason=data.get('reason', ''),
     )
 
-    # Check if user has enough days
     if vacation.business_days > current_user.days_remaining():
-        return jsonify({
-            'success': False,
-            'error': f'No tienes suficientes días disponibles. Disponibles: {current_user.days_remaining()}, Solicitados: {vacation.business_days}'
-        }), 400
+        return jsonify({'success': False, 'error': (
+            f'No tienes suficientes días disponibles. '
+            f'Disponibles: {current_user.days_remaining()}, Solicitados: {vacation.business_days}'
+        )}), 400
 
-    # Check for overlapping requests
     overlapping = VacationRequest.query.filter(
         VacationRequest.user_id == current_user.id,
         VacationRequest.status != 'rejected',
         VacationRequest.start_date <= end,
-        VacationRequest.end_date >= start
+        VacationRequest.end_date >= start,
     ).first()
-
     if overlapping:
         return jsonify({'success': False, 'error': 'Ya tienes una solicitud en esas fechas'}), 400
 
     db.session.add(vacation)
     db.session.commit()
-
+    log_audit('create_vacation', 'vacation', vacation.id, f"{start} - {end}")
     return jsonify({'success': True, 'vacation': vacation.to_dict()})
+
 
 @app.route('/api/vacations/<int:vacation_id>', methods=['DELETE'])
 @login_required
@@ -400,16 +645,16 @@ def delete_vacation(vacation_id):
     vacation = db.session.get(VacationRequest, vacation_id)
     if not vacation:
         return jsonify({'success': False, 'error': 'Solicitud no encontrada'}), 404
-
     if vacation.user_id != current_user.id and current_user.role not in ['admin', 'manager']:
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
-
     if vacation.status == 'approved' and current_user.role == 'employee':
         return jsonify({'success': False, 'error': 'No puedes cancelar vacaciones ya aprobadas'}), 400
 
+    log_audit('delete_vacation', 'vacation', vacation_id)
     db.session.delete(vacation)
     db.session.commit()
     return jsonify({'success': True})
+
 
 @app.route('/api/vacations/<int:vacation_id>/review', methods=['POST'])
 @login_required
@@ -422,6 +667,10 @@ def review_vacation(vacation_id):
     if not vacation:
         return jsonify({'success': False, 'error': 'Solicitud no encontrada'}), 404
 
+    # A manager/admin cannot approve/reject their own request
+    if vacation.user_id == current_user.id:
+        return jsonify({'success': False, 'error': 'No puedes aprobar o rechazar tu propia solicitud'}), 403
+
     action = data.get('action')
     if action not in ['approve', 'reject']:
         return jsonify({'success': False, 'error': 'Acción inválida'}), 400
@@ -430,13 +679,13 @@ def review_vacation(vacation_id):
     vacation.reviewed_by = current_user.id
     vacation.review_comment = data.get('comment', '')
     vacation.reviewed_at = datetime.utcnow()
-
     db.session.commit()
+    log_audit(f'vacation_{action}d', 'vacation', vacation_id)
     return jsonify({'success': True, 'vacation': vacation.to_dict()})
 
 
 # ─────────────────────────────────────────────
-# API Routes - Users (Admin)
+# API Routes — Users (Admin)
 # ─────────────────────────────────────────────
 
 @app.route('/api/users', methods=['GET'])
@@ -444,8 +693,9 @@ def review_vacation(vacation_id):
 def get_users():
     if current_user.role not in ['admin', 'manager']:
         return jsonify([current_user.to_dict()])
-    users = User.query.order_by(User.department, User.first_name).all()
+    users = User.query.filter_by(is_deleted=False).order_by(User.department, User.first_name).all()
     return jsonify([u.to_dict() for u in users])
+
 
 @app.route('/api/users', methods=['POST'])
 @login_required
@@ -457,14 +707,13 @@ def create_user():
 
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'success': False, 'error': 'El nombre de usuario ya existe'}), 400
-
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'success': False, 'error': 'El email ya existe'}), 400
 
+    import random
     colors = ['#6C5CE7', '#00B894', '#E17055', '#0984E3', '#D63031',
               '#FDCB6E', '#E84393', '#00CEC9', '#2D3436', '#A29BFE']
-    import random
-    
+
     user = User(
         username=data['username'],
         email=data['email'],
@@ -473,13 +722,31 @@ def create_user():
         department=data.get('department', 'General'),
         role=data.get('role', 'employee'),
         total_days=data.get('total_days', 22),
-        avatar_color=random.choice(colors)
+        avatar_color=random.choice(colors),
+        must_change_password=True,
     )
-    user.set_password(data.get('password', 'password123'))
+    # Generate a secure random temporary password
+    temp_password = secrets.token_urlsafe(10)
+    user.set_password(temp_password)
 
     db.session.add(user)
     db.session.commit()
-    return jsonify({'success': True, 'user': user.to_dict()})
+
+    base = request.host_url.rstrip('/')
+    send_email(
+        user.email,
+        "Bienvenido a VacationControl — Credenciales de acceso",
+        f"Hola {user.first_name},\n\n"
+        f"Tu cuenta ha sido creada.\n\n"
+        f"  Usuario: {user.username}\n"
+        f"  Contraseña temporal: {temp_password}\n\n"
+        f"Deberás cambiar tu contraseña en el primer inicio de sesión.\n\n"
+        f"Accede en: {base}\n\n"
+        f"— VacationControl",
+    )
+    log_audit('create_user', 'user', user.id, f"username={user.username}")
+    return jsonify({'success': True, 'user': user.to_dict(), 'temp_password': temp_password})
+
 
 @app.route('/api/users/<int:user_id>', methods=['PUT'])
 @login_required
@@ -488,7 +755,7 @@ def update_user(user_id):
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
 
     user = db.session.get(User, user_id)
-    if not user:
+    if not user or user.is_deleted:
         return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
 
     data = request.get_json()
@@ -506,10 +773,15 @@ def update_user(user_id):
         if 'total_days' in data:
             user.total_days = data['total_days']
     if 'password' in data and data['password']:
+        if len(data['password']) < 8:
+            return jsonify({'success': False, 'error': 'La contraseña debe tener al menos 8 caracteres'}), 400
         user.set_password(data['password'])
+        user.must_change_password = False
 
     db.session.commit()
+    log_audit('update_user', 'user', user_id)
     return jsonify({'success': True, 'user': user.to_dict()})
+
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
 @login_required
@@ -518,20 +790,41 @@ def delete_user(user_id):
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
 
     user = db.session.get(User, user_id)
-    if not user:
+    if not user or user.is_deleted:
         return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
-
     if user.id == current_user.id:
         return jsonify({'success': False, 'error': 'No puedes eliminarte a ti mismo'}), 400
 
-    VacationRequest.query.filter_by(user_id=user.id).delete()
-    db.session.delete(user)
+    log_audit('delete_user', 'user', user.id, f"username={user.username}")
+
+    # GDPR soft-delete: anonymise personal data, keep vacation records
+    user.is_deleted = True
+    user.deleted_at = datetime.utcnow()
+    user.first_name = 'Empleado'
+    user.last_name = 'Eliminado'
+    user.email = f'deleted_{user.id}@deleted.local'
+    user.username = f'deleted_{user.id}'
+    user.avatar_image = None
     db.session.commit()
     return jsonify({'success': True})
 
 
+@app.route('/api/users/<int:user_id>/avatar', methods=['POST'])
+@login_required
+def update_user_avatar(user_id):
+    if current_user.role != 'admin' and current_user.id != user_id:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    user = db.session.get(User, user_id)
+    if not user or user.is_deleted:
+        return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
+    data = request.get_json()
+    user.avatar_image = data.get('avatar_image')
+    db.session.commit()
+    return jsonify({'success': True, 'user': user.to_dict()})
+
+
 # ─────────────────────────────────────────────
-# API Routes - Calendar & Stats
+# API Routes — Calendar & Stats
 # ─────────────────────────────────────────────
 
 @app.route('/api/calendar', methods=['GET'])
@@ -541,33 +834,24 @@ def get_calendar():
     month = request.args.get('month', date.today().month, type=int)
 
     start = date(year, month, 1)
-    if month == 12:
-        end = date(year + 1, 1, 1) - timedelta(days=1)
-    else:
-        end = date(year, month + 1, 1) - timedelta(days=1)
+    end = date(year + 1, 1, 1) - timedelta(days=1) if month == 12 else date(year, month + 1, 1) - timedelta(days=1)
 
     user_id_filter = request.args.get('user_id', type=int)
-
     query = VacationRequest.query.filter(
         VacationRequest.status.in_(['approved', 'pending']),
         VacationRequest.start_date <= end,
-        VacationRequest.end_date >= start
+        VacationRequest.end_date >= start,
     )
-
     if user_id_filter:
         query = query.filter(VacationRequest.user_id == user_id_filter)
 
     vacations = query.all()
-
     holidays = PublicHoliday.query.filter(
-        PublicHoliday.date >= start,
-        PublicHoliday.date <= end
+        PublicHoliday.date >= start, PublicHoliday.date <= end
     ).all()
 
-    return jsonify({
-        'vacations': [v.to_dict() for v in vacations],
-        'holidays': [h.to_dict() for h in holidays]
-    })
+    return jsonify({'vacations': [v.to_dict() for v in vacations], 'holidays': [h.to_dict() for h in holidays]})
+
 
 @app.route('/api/stats', methods=['GET'])
 @login_required
@@ -577,25 +861,21 @@ def get_stats():
     total_requests = VacationRequest.query.filter(
         db.extract('year', VacationRequest.start_date) == year
     ).count()
-
     pending_requests = VacationRequest.query.filter(
         VacationRequest.status == 'pending',
-        db.extract('year', VacationRequest.start_date) == year
+        db.extract('year', VacationRequest.start_date) == year,
     ).count()
-
     approved_requests = VacationRequest.query.filter(
         VacationRequest.status == 'approved',
-        db.extract('year', VacationRequest.start_date) == year
+        db.extract('year', VacationRequest.start_date) == year,
     ).count()
-
     rejected_requests = VacationRequest.query.filter(
         VacationRequest.status == 'rejected',
-        db.extract('year', VacationRequest.start_date) == year
+        db.extract('year', VacationRequest.start_date) == year,
     ).count()
 
-    # Department breakdown
     departments = {}
-    users = User.query.all()
+    users = User.query.filter_by(is_deleted=False).all()
     for u in users:
         dept = u.department
         if dept not in departments:
@@ -604,19 +884,14 @@ def get_stats():
         departments[dept]['days_used'] += u.days_used(year)
         departments[dept]['days_total'] += u.total_days
 
-    # Monthly breakdown
     monthly = {}
     for m in range(1, 13):
-        month_start = date(year, m, 1)
-        if m == 12:
-            month_end = date(year + 1, 1, 1) - timedelta(days=1)
-        else:
-            month_end = date(year, m + 1, 1) - timedelta(days=1)
-
+        m_start = date(year, m, 1)
+        m_end = date(year + 1, 1, 1) - timedelta(days=1) if m == 12 else date(year, m + 1, 1) - timedelta(days=1)
         count = VacationRequest.query.filter(
             VacationRequest.status == 'approved',
-            VacationRequest.start_date <= month_end,
-            VacationRequest.end_date >= month_start
+            VacationRequest.start_date <= m_end,
+            VacationRequest.end_date >= m_start,
         ).count()
         monthly[m] = count
 
@@ -627,11 +902,12 @@ def get_stats():
         'rejected_requests': rejected_requests,
         'departments': departments,
         'monthly': monthly,
-        'year': year
+        'year': year,
     })
 
+
 # ─────────────────────────────────────────────
-# API Routes - Departments
+# API Routes — Departments
 # ─────────────────────────────────────────────
 
 @app.route('/api/departments', methods=['GET'])
@@ -639,6 +915,7 @@ def get_stats():
 def get_departments():
     depts = Department.query.order_by(Department.name).all()
     return jsonify([d.to_dict() for d in depts])
+
 
 @app.route('/api/departments', methods=['POST'])
 @login_required
@@ -648,14 +925,14 @@ def create_department():
     data = request.get_json()
     if not data.get('name'):
         return jsonify({'success': False, 'error': 'Nombre requerido'}), 400
-    
     if Department.query.filter_by(name=data['name']).first():
         return jsonify({'success': False, 'error': 'El departamento ya existe'}), 400
-        
     dept = Department(name=data['name'], description=data.get('description', ''))
     db.session.add(dept)
     db.session.commit()
+    log_audit('create_department', 'department', dept.id, f"name={dept.name}")
     return jsonify({'success': True, 'department': dept.to_dict()})
+
 
 @app.route('/api/departments/<int:dept_id>', methods=['PUT'])
 @login_required
@@ -672,6 +949,7 @@ def update_department(dept_id):
         dept.description = data['description']
     db.session.commit()
     return jsonify({'success': True, 'department': dept.to_dict()})
+
 
 @app.route('/api/departments/<int:dept_id>', methods=['DELETE'])
 @login_required
@@ -693,6 +971,7 @@ def get_holidays():
     holidays = PublicHoliday.query.filter_by(year=year).order_by(PublicHoliday.date).all()
     return jsonify([h.to_dict() for h in holidays])
 
+
 @app.route('/api/holidays', methods=['POST'])
 @login_required
 def add_holiday():
@@ -703,15 +982,11 @@ def add_holiday():
         holiday_date = date_parser.parse(data['date']).date()
     except (KeyError, ValueError):
         return jsonify({'success': False, 'error': 'Fecha inválida'}), 400
-
-    holiday = PublicHoliday(
-        date=holiday_date,
-        name=data['name'],
-        year=holiday_date.year
-    )
+    holiday = PublicHoliday(date=holiday_date, name=data['name'], year=holiday_date.year)
     db.session.add(holiday)
     db.session.commit()
     return jsonify({'success': True, 'holiday': holiday.to_dict()})
+
 
 @app.route('/api/holidays/<int:holiday_id>', methods=['DELETE'])
 @login_required
@@ -727,7 +1002,7 @@ def delete_holiday(holiday_id):
 
 
 # ─────────────────────────────────────────────
-# API Routes - Late Arrivals
+# API Routes — Late Arrivals
 # ─────────────────────────────────────────────
 
 @app.route('/api/late-arrivals', methods=['GET'])
@@ -736,36 +1011,34 @@ def get_late_arrivals():
     user_id = request.args.get('user_id', type=int)
     if user_id:
         late_arrivals = LateArrival.query.filter_by(user_id=user_id).order_by(LateArrival.date.desc()).all()
+    elif current_user.role in ['admin', 'manager']:
+        late_arrivals = LateArrival.query.order_by(LateArrival.date.desc()).all()
     else:
-        # Managers and Admins can see all
-        if current_user.role in ['admin', 'manager']:
-            late_arrivals = LateArrival.query.order_by(LateArrival.date.desc()).all()
-        else:
-            late_arrivals = LateArrival.query.filter_by(user_id=current_user.id).order_by(LateArrival.date.desc()).all()
-            
+        late_arrivals = LateArrival.query.filter_by(user_id=current_user.id).order_by(LateArrival.date.desc()).all()
     return jsonify([l.to_dict() for l in late_arrivals])
+
 
 @app.route('/api/late-arrivals', methods=['POST'])
 @login_required
 def create_late_arrival():
     if current_user.role not in ['admin', 'manager']:
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
-        
     data = request.get_json()
     try:
         arrival_date = date_parser.parse(data['date']).date()
     except (KeyError, ValueError):
         return jsonify({'success': False, 'error': 'Fecha inválida'}), 400
-        
     late = LateArrival(
         user_id=data['user_id'],
         date=arrival_date,
         minutes_late=data.get('minutes_late', 0),
-        reason=data.get('reason', '')
+        reason=data.get('reason', ''),
     )
     db.session.add(late)
     db.session.commit()
+    log_audit('create_late_arrival', 'late_arrival', late.id, f"user_id={data['user_id']}")
     return jsonify({'success': True, 'late_arrival': late.to_dict()})
+
 
 @app.route('/api/late-arrivals/<int:late_id>', methods=['DELETE'])
 @login_required
@@ -775,22 +1048,24 @@ def delete_late_arrival(late_id):
     late = db.session.get(LateArrival, late_id)
     if not late:
         return jsonify({'success': False, 'error': 'Registro no encontrado'}), 404
+    log_audit('delete_late_arrival', 'late_arrival', late_id)
     db.session.delete(late)
     db.session.commit()
     return jsonify({'success': True})
 
+
 @app.route('/api/late-arrivals/ranking', methods=['GET'])
 @login_required
 def get_late_ranking():
-    # Only admins and managers can see ranking
     if current_user.role not in ['admin', 'manager']:
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
-        
     ranking = db.session.query(
         User.id, User.first_name, User.last_name, User.avatar_color, User.avatar_image,
         db.func.count(LateArrival.id).label('total_late'),
-        db.func.sum(LateArrival.minutes_late).label('total_minutes')
-    ).join(LateArrival, User.id == LateArrival.user_id).group_by(User.id).order_by(db.text('total_late DESC')).all()
+        db.func.sum(LateArrival.minutes_late).label('total_minutes'),
+    ).join(LateArrival, User.id == LateArrival.user_id).filter(
+        User.is_deleted == False
+    ).group_by(User.id).order_by(db.text('total_late DESC')).all()
 
     return jsonify([{
         'id': r[0],
@@ -799,12 +1074,12 @@ def get_late_ranking():
         'avatar_image': r[4],
         'total_late': r[5],
         'total_minutes': int(r[6] or 0),
-        'initials': f"{r[1][0]}{r[2][0]}".upper()
+        'initials': f"{r[1][0]}{r[2][0]}".upper(),
     } for r in ranking])
 
 
 # ─────────────────────────────────────────────
-# API Routes - Company Settings & Avatars
+# API Routes — Company Settings & Avatars
 # ─────────────────────────────────────────────
 
 @app.route('/api/settings', methods=['GET'])
@@ -813,6 +1088,7 @@ def get_settings():
     if not settings:
         return jsonify({'company_name': 'VacationControl', 'logo_data': None})
     return jsonify({'company_name': settings.company_name, 'logo_data': settings.logo_data})
+
 
 @app.route('/api/settings', methods=['POST'])
 @login_required
@@ -829,24 +1105,49 @@ def update_settings():
     if 'logo_data' in data:
         settings.logo_data = data['logo_data']
     db.session.commit()
+    log_audit('update_settings', 'settings', settings.id)
     return jsonify({'success': True, 'company_name': settings.company_name, 'logo_data': settings.logo_data})
-
-@app.route('/api/users/<int:user_id>/avatar', methods=['POST'])
-@login_required
-def update_user_avatar(user_id):
-    if current_user.role != 'admin' and current_user.id != user_id:
-        return jsonify({'success': False, 'error': 'No autorizado'}), 403
-    user = db.session.get(User, user_id)
-    if not user:
-        return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
-    data = request.get_json()
-    user.avatar_image = data.get('avatar_image')
-    db.session.commit()
-    return jsonify({'success': True, 'user': user.to_dict()})
 
 
 # ─────────────────────────────────────────────
-# Initialize DB with demo data
+# API Routes — Audit Log & Backup
+# ─────────────────────────────────────────────
+
+@app.route('/api/admin/audit-log', methods=['GET'])
+@login_required
+def get_audit_log():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    limit = min(request.args.get('limit', 200, type=int), 1000)
+    logs = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(limit).all()
+    return jsonify([l.to_dict() for l in logs])
+
+
+@app.route('/api/admin/backup', methods=['GET'])
+@login_required
+def export_backup():
+    """JSON export of all data for manual backups."""
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    backup = {
+        'exported_at': datetime.utcnow().isoformat(),
+        'users': [u.to_dict() for u in User.query.filter_by(is_deleted=False).all()],
+        'vacations': [v.to_dict() for v in VacationRequest.query.all()],
+        'holidays': [h.to_dict() for h in PublicHoliday.query.all()],
+        'departments': [d.to_dict() for d in Department.query.all()],
+        'settings': get_settings().get_json(),
+    }
+    log_audit('backup_export', 'system')
+    response = make_response(json.dumps(backup, ensure_ascii=False, indent=2))
+    response.headers['Content-Disposition'] = (
+        f'attachment; filename=backup_{date.today().isoformat()}.json'
+    )
+    response.headers['Content-Type'] = 'application/json'
+    return response
+
+
+# ─────────────────────────────────────────────
+# Initialize DB
 # ─────────────────────────────────────────────
 
 def init_db():
@@ -854,10 +1155,10 @@ def init_db():
         import traceback
         try:
             db.create_all()
-            print(f"[init_db] DB path: {_db_dir}/vacations.db")
+            db_uri = app.config['SQLALCHEMY_DATABASE_URI']
+            print(f"[init_db] DB: {db_uri[:40]}...")
 
             admin_password = os.environ.get('ADMIN_PASSWORD', 'admin')
-
             admin = User.query.filter_by(username='admin').first()
             if admin is None:
                 admin = User(
@@ -868,11 +1169,10 @@ def init_db():
                     department='Direccion',
                     role='admin',
                     total_days=25,
-                    avatar_color='#6C5CE7'
+                    avatar_color='#6C5CE7',
+                    must_change_password=False,
                 )
                 db.session.add(admin)
-
-            # Always sync password to current ADMIN_PASSWORD env var
             admin.set_password(admin_password)
             db.session.commit()
             print(f"[init_db] ✅ Admin listo — usuario: admin  contrasena: {admin_password}")
@@ -903,7 +1203,6 @@ def init_db():
             db.session.rollback()
 
 
-# Initialize DB on startup
 init_db()
 
 if __name__ == '__main__':

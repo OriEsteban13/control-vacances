@@ -1,3 +1,9 @@
+databases:
+  - name: control-vacances-db
+    databaseName: vacaciones
+    user: vacaciones
+    plan: free
+
 services:
   - type: web
     name: control-vacances
@@ -12,4 +18,17 @@ services:
         value: admin
       - key: PYTHON_VERSION
         value: 3.11.0
-
+      - key: DATABASE_URL
+        fromDatabase:
+          name: control-vacances-db
+          property: connectionString
+      - key: MAIL_SERVER
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: 587
+      - key: MAIL_USERNAME
+        value: ""
+      - key: MAIL_PASSWORD
+        value: ""
+      - key: MAIL_DEFAULT_SENDER
+        value: ""
