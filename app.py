@@ -130,6 +130,7 @@ class User(UserMixin, db.Model):
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    hire_date = db.Column(db.Date, nullable=True)
 
     vacations = db.relationship('VacationRequest', backref='employee', lazy=True,
                                 foreign_keys='VacationRequest.user_id')
@@ -151,25 +152,41 @@ class User(UserMixin, db.Model):
     def days_used(self, year=None):
         if year is None:
             year = date.today().year
-        approved = VacationRequest.query.filter_by(user_id=self.id, status='approved').all()
-        total = 0
-        for v in approved:
-            if v.start_date.year == year or v.end_date.year == year:
-                total += v.business_days
-        return total
+        approved = VacationRequest.query.filter(
+            VacationRequest.user_id == self.id,
+            VacationRequest.status == 'approved',
+            db.extract('year', VacationRequest.start_date) == year
+        ).all()
+        return sum(v.business_days for v in approved)
 
     def days_pending(self, year=None):
         if year is None:
             year = date.today().year
-        pending = VacationRequest.query.filter_by(user_id=self.id, status='pending').all()
-        total = 0
-        for v in pending:
-            if v.start_date.year == year or v.end_date.year == year:
-                total += v.business_days
-        return total
+        pending = VacationRequest.query.filter(
+            VacationRequest.user_id == self.id,
+            VacationRequest.status == 'pending',
+            db.extract('year', VacationRequest.start_date) == year
+        ).all()
+        return sum(v.business_days for v in pending)
+
+    def get_allocation(self, year=None):
+        if year is None:
+            year = date.today().year
+        balance = VacationBalance.query.filter_by(
+            user_id=self.id, year=year, vacation_type='vacaciones'
+        ).first()
+        if balance:
+            carried = 0
+            if balance.carried_over:
+                if not balance.carryover_expiry or balance.carryover_expiry >= date.today():
+                    carried = balance.carried_over
+            return balance.total_days + carried
+        if self.hire_date:
+            return calculate_prorated_days(self.total_days, self.hire_date, year)
+        return self.total_days
 
     def days_remaining(self, year=None):
-        return self.total_days - self.days_used(year)
+        return self.get_allocation(year) - self.days_used(year)
 
     def to_dict(self):
         return {
@@ -183,12 +200,14 @@ class User(UserMixin, db.Model):
             'department': self.department,
             'role': self.role,
             'total_days': self.total_days,
+            'allocated_days': self.get_allocation(),
             'days_used': self.days_used(),
             'days_pending': self.days_pending(),
             'days_remaining': self.days_remaining(),
             'avatar_color': self.avatar_color,
             'avatar_image': self.avatar_image,
             'must_change_password': self.must_change_password,
+            'hire_date': self.hire_date.isoformat() if self.hire_date else None,
         }
 
 
@@ -204,15 +223,21 @@ class VacationRequest(db.Model):
     review_comment = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     reviewed_at = db.Column(db.DateTime, nullable=True)
+    cancel_reason = db.Column(db.Text, default='')
+    cancellation_requested_at = db.Column(db.DateTime, nullable=True)
 
     reviewer = db.relationship('User', foreign_keys=[reviewed_by])
 
     @property
     def business_days(self):
+        holiday_dates = {h.date for h in PublicHoliday.query.filter(
+            PublicHoliday.date >= self.start_date,
+            PublicHoliday.date <= self.end_date,
+        ).all()}
         days = 0
         current = self.start_date
         while current <= self.end_date:
-            if current.weekday() < 5:
+            if current.weekday() < 5 and current not in holiday_dates:
                 days += 1
             current += timedelta(days=1)
         return days
@@ -235,6 +260,8 @@ class VacationRequest(db.Model):
             'reviewed_by': self.reviewed_by,
             'reviewer_name': self.reviewer.full_name if self.reviewer else None,
             'review_comment': self.review_comment,
+            'cancel_reason': self.cancel_reason,
+            'cancellation_requested_at': self.cancellation_requested_at.isoformat() if self.cancellation_requested_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
         }
@@ -317,6 +344,75 @@ class AuditLog(db.Model):
         }
 
 
+class VacationBalance(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    vacation_type = db.Column(db.String(50), nullable=False, default='vacaciones')
+    total_days = db.Column(db.Integer, nullable=False, default=0)
+    carried_over = db.Column(db.Integer, nullable=False, default=0)
+    carryover_expiry = db.Column(db.Date, nullable=True)
+
+    user = db.relationship('User')
+    __table_args__ = (db.UniqueConstraint('user_id', 'year', 'vacation_type', name='uq_balance'),)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'year': self.year,
+            'vacation_type': self.vacation_type,
+            'total_days': self.total_days,
+            'carried_over': self.carried_over,
+            'carryover_expiry': self.carryover_expiry.isoformat() if self.carryover_expiry else None,
+        }
+
+
+class DepartmentRule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    department = db.Column(db.String(100), unique=True, nullable=False)
+    max_simultaneous = db.Column(db.Integer, nullable=True)
+    min_advance_days = db.Column(db.Integer, nullable=True)
+    max_consecutive_days = db.Column(db.Integer, nullable=True)
+    blackout_periods = db.Column(db.Text, nullable=True)  # JSON: [{start, end, reason}]
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'department': self.department,
+            'max_simultaneous': self.max_simultaneous,
+            'min_advance_days': self.min_advance_days,
+            'max_consecutive_days': self.max_consecutive_days,
+            'blackout_periods': json.loads(self.blackout_periods) if self.blackout_periods else [],
+        }
+
+
+class ManagerDelegation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    delegator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    delegate_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    delegator = db.relationship('User', foreign_keys=[delegator_id])
+    delegate = db.relationship('User', foreign_keys=[delegate_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'delegator_id': self.delegator_id,
+            'delegator_name': self.delegator.full_name if self.delegator else None,
+            'delegate_id': self.delegate_id,
+            'delegate_name': self.delegate.full_name if self.delegate else None,
+            'start_date': self.start_date.isoformat(),
+            'end_date': self.end_date.isoformat(),
+            'active': self.active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 @login_manager.user_loader
 def load_user(user_id):
     try:
@@ -368,6 +464,112 @@ def _generate_csrf():
     token = secrets.token_hex(32)
     session['csrf_token'] = token
     return token
+
+
+def fmt_date(d):
+    return d.strftime('%d/%m/%Y') if d else ''
+
+
+def calculate_prorated_days(total_days, hire_date, year):
+    if not hire_date or hire_date.year < year:
+        return total_days
+    if hire_date.year > year:
+        return 0
+    year_end = date(year, 12, 31)
+    total_days_in_year = (date(year, 12, 31) - date(year, 1, 1)).days + 1
+    days_in_year = (year_end - hire_date).days + 1
+    return round(total_days * days_in_year / total_days_in_year)
+
+
+def can_approve_for(user):
+    """Check if user has approval authority (own role or via active delegation)."""
+    if user.role in ['admin', 'manager']:
+        return True
+    today = date.today()
+    delegation = ManagerDelegation.query.filter(
+        ManagerDelegation.delegate_id == user.id,
+        ManagerDelegation.active == True,
+        ManagerDelegation.start_date <= today,
+        ManagerDelegation.end_date >= today,
+    ).first()
+    return delegation is not None
+
+
+def notify_vacation_created(vacation):
+    employee = db.session.get(User, vacation.user_id)
+    if not employee:
+        return
+    send_email(
+        employee.email,
+        f"Solicitud de vacaciones recibida — {fmt_date(vacation.start_date)}",
+        f"Hola {employee.first_name},\n\n"
+        f"Tu solicitud de {vacation.business_days} días hábiles "
+        f"({fmt_date(vacation.start_date)} — {fmt_date(vacation.end_date)}) "
+        f"ha sido enviada y está pendiente de aprobación.\n\n— VacationControl",
+    )
+    managers = User.query.filter(
+        User.role.in_(['admin', 'manager']),
+        User.is_deleted == False,
+        User.id != employee.id,
+    ).all()
+    for mgr in managers:
+        send_email(
+            mgr.email,
+            f"Nueva solicitud de vacaciones — {employee.full_name}",
+            f"Hola {mgr.first_name},\n\n"
+            f"{employee.full_name} ha solicitado {vacation.business_days} días hábiles "
+            f"({fmt_date(vacation.start_date)} — {fmt_date(vacation.end_date)}).\n\n"
+            f"Accede a la aplicación para revisarla.\n\n— VacationControl",
+        )
+
+
+def notify_vacation_reviewed(vacation, action):
+    employee = db.session.get(User, vacation.user_id)
+    if not employee:
+        return
+    label = 'aprobada' if action == 'approve' else 'rechazada'
+    send_email(
+        employee.email,
+        f"Tu solicitud de vacaciones ha sido {label}",
+        f"Hola {employee.first_name},\n\n"
+        f"Tu solicitud del {fmt_date(vacation.start_date)} al {fmt_date(vacation.end_date)} "
+        f"({vacation.business_days} días hábiles) ha sido {label}.\n\n"
+        + (f"Comentario: {vacation.review_comment}\n\n" if vacation.review_comment else "")
+        + "— VacationControl",
+    )
+
+
+def notify_cancel_requested(vacation):
+    employee = db.session.get(User, vacation.user_id)
+    managers = User.query.filter(
+        User.role.in_(['admin', 'manager']),
+        User.is_deleted == False,
+    ).all()
+    for mgr in managers:
+        send_email(
+            mgr.email,
+            f"Solicitud de cancelación — {employee.full_name if employee else ''}",
+            f"Hola {mgr.first_name},\n\n"
+            f"{employee.full_name if employee else 'Un empleado'} ha solicitado cancelar sus vacaciones "
+            f"del {fmt_date(vacation.start_date)} al {fmt_date(vacation.end_date)}.\n\n"
+            + (f"Motivo: {vacation.cancel_reason}\n\n" if vacation.cancel_reason else "")
+            + "Accede a la aplicación para aprobar o rechazar la cancelación.\n\n— VacationControl",
+        )
+
+
+def notify_cancel_reviewed(vacation, approved):
+    employee = db.session.get(User, vacation.user_id)
+    if not employee:
+        return
+    label = 'aprobada' if approved else 'rechazada'
+    send_email(
+        employee.email,
+        f"Tu solicitud de cancelación ha sido {label}",
+        f"Hola {employee.first_name},\n\n"
+        f"Tu solicitud de cancelación de vacaciones "
+        f"({fmt_date(vacation.start_date)} — {fmt_date(vacation.end_date)}) "
+        f"ha sido {label}.\n\n— VacationControl",
+    )
 
 
 # ─── CSRF validation on all state-changing requests ───────────────────────────
@@ -553,7 +755,7 @@ def change_password():
 @login_required
 def get_vacations():
     year = request.args.get('year', date.today().year, type=int)
-    if current_user.role in ['admin', 'manager']:
+    if can_approve_for(current_user):
         vacations = VacationRequest.query.filter(
             db.extract('year', VacationRequest.start_date) == year
         ).order_by(VacationRequest.created_at.desc()).all()
@@ -626,16 +828,65 @@ def create_vacation():
 
     overlapping = VacationRequest.query.filter(
         VacationRequest.user_id == current_user.id,
-        VacationRequest.status != 'rejected',
+        VacationRequest.status.in_(['pending', 'approved', 'cancel_requested']),
         VacationRequest.start_date <= end,
         VacationRequest.end_date >= start,
     ).first()
     if overlapping:
         return jsonify({'success': False, 'error': 'Ya tienes una solicitud en esas fechas'}), 400
 
+    # Department rule validations
+    dept_rule = DepartmentRule.query.filter_by(department=current_user.department).first()
+    if dept_rule:
+        if dept_rule.min_advance_days:
+            min_start = date.today() + timedelta(days=dept_rule.min_advance_days)
+            if start < min_start:
+                return jsonify({'success': False, 'error': (
+                    f'Tu departamento requiere solicitar vacaciones con al menos '
+                    f'{dept_rule.min_advance_days} días de antelación'
+                )}), 400
+        if dept_rule.max_consecutive_days and vacation.business_days > dept_rule.max_consecutive_days:
+            return jsonify({'success': False, 'error': (
+                f'Tu departamento permite un máximo de {dept_rule.max_consecutive_days} '
+                f'días hábiles consecutivos'
+            )}), 400
+        if dept_rule.blackout_periods:
+            try:
+                blackouts = json.loads(dept_rule.blackout_periods)
+                for bp in blackouts:
+                    bp_start = date_parser.parse(bp['start']).date()
+                    bp_end = date_parser.parse(bp['end']).date()
+                    if start <= bp_end and end >= bp_start:
+                        reason_txt = f" ({bp['reason']})" if bp.get('reason') else ''
+                        return jsonify({'success': False, 'error': (
+                            f'Período bloqueado en tu departamento: '
+                            f'{fmt_date(bp_start)} — {fmt_date(bp_end)}{reason_txt}'
+                        )}), 400
+            except (json.JSONDecodeError, KeyError):
+                pass
+        if dept_rule.max_simultaneous:
+            overlap_count = db.session.query(db.func.count(VacationRequest.id)).join(
+                User, User.id == VacationRequest.user_id
+            ).filter(
+                User.department == current_user.department,
+                VacationRequest.user_id != current_user.id,
+                VacationRequest.status.in_(['approved', 'pending']),
+                VacationRequest.start_date <= end,
+                VacationRequest.end_date >= start,
+            ).scalar() or 0
+            if overlap_count >= dept_rule.max_simultaneous:
+                return jsonify({'success': False, 'error': (
+                    f'Ya hay {overlap_count} persona(s) de tu departamento ausentes en esas fechas. '
+                    f'Máximo simultáneo: {dept_rule.max_simultaneous}'
+                )}), 400
+
     db.session.add(vacation)
     db.session.commit()
     log_audit('create_vacation', 'vacation', vacation.id, f"{start} - {end}")
+    try:
+        notify_vacation_created(vacation)
+    except Exception:
+        pass
     return jsonify({'success': True, 'vacation': vacation.to_dict()})
 
 
@@ -659,7 +910,7 @@ def delete_vacation(vacation_id):
 @app.route('/api/vacations/<int:vacation_id>/review', methods=['POST'])
 @login_required
 def review_vacation(vacation_id):
-    if current_user.role not in ['admin', 'manager']:
+    if not can_approve_for(current_user):
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
 
     data = request.get_json()
@@ -667,13 +918,14 @@ def review_vacation(vacation_id):
     if not vacation:
         return jsonify({'success': False, 'error': 'Solicitud no encontrada'}), 404
 
-    # A manager/admin cannot approve/reject their own request
     if vacation.user_id == current_user.id:
         return jsonify({'success': False, 'error': 'No puedes aprobar o rechazar tu propia solicitud'}), 403
 
     action = data.get('action')
     if action not in ['approve', 'reject']:
         return jsonify({'success': False, 'error': 'Acción inválida'}), 400
+    if vacation.status not in ['pending']:
+        return jsonify({'success': False, 'error': f'Esta solicitud ya está en estado: {vacation.status}'}), 400
 
     vacation.status = 'approved' if action == 'approve' else 'rejected'
     vacation.reviewed_by = current_user.id
@@ -681,7 +933,99 @@ def review_vacation(vacation_id):
     vacation.reviewed_at = datetime.utcnow()
     db.session.commit()
     log_audit(f'vacation_{action}d', 'vacation', vacation_id)
+    try:
+        notify_vacation_reviewed(vacation, action)
+    except Exception:
+        pass
     return jsonify({'success': True, 'vacation': vacation.to_dict()})
+
+
+@app.route('/api/vacations/<int:vacation_id>/request-cancel', methods=['POST'])
+@login_required
+def request_cancel_vacation(vacation_id):
+    vacation = db.session.get(VacationRequest, vacation_id)
+    if not vacation:
+        return jsonify({'success': False, 'error': 'Solicitud no encontrada'}), 404
+    if vacation.user_id != current_user.id and current_user.role not in ['admin', 'manager']:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    if vacation.status != 'approved':
+        return jsonify({'success': False, 'error': 'Solo se pueden cancelar vacaciones aprobadas'}), 400
+
+    data = request.get_json() or {}
+    vacation.status = 'cancel_requested'
+    vacation.cancel_reason = data.get('reason', '')
+    vacation.cancellation_requested_at = datetime.utcnow()
+    db.session.commit()
+    log_audit('cancel_requested', 'vacation', vacation_id)
+    try:
+        notify_cancel_requested(vacation)
+    except Exception:
+        pass
+    return jsonify({'success': True, 'vacation': vacation.to_dict()})
+
+
+@app.route('/api/vacations/<int:vacation_id>/review-cancel', methods=['POST'])
+@login_required
+def review_cancel_vacation(vacation_id):
+    if not can_approve_for(current_user):
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+
+    vacation = db.session.get(VacationRequest, vacation_id)
+    if not vacation:
+        return jsonify({'success': False, 'error': 'Solicitud no encontrada'}), 404
+    if vacation.status != 'cancel_requested':
+        return jsonify({'success': False, 'error': 'Esta solicitud no está pendiente de cancelación'}), 400
+
+    data = request.get_json() or {}
+    action = data.get('action')
+    if action not in ['approve', 'reject']:
+        return jsonify({'success': False, 'error': 'Acción inválida'}), 400
+
+    approved = action == 'approve'
+    vacation.status = 'cancelled' if approved else 'approved'
+    vacation.reviewed_by = current_user.id
+    vacation.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    log_audit(f'cancel_{"approved" if approved else "rejected"}', 'vacation', vacation_id)
+    try:
+        notify_cancel_reviewed(vacation, approved)
+    except Exception:
+        pass
+    return jsonify({'success': True, 'vacation': vacation.to_dict()})
+
+
+@app.route('/api/vacations/bulk-review', methods=['POST'])
+@login_required
+def bulk_review_vacations():
+    if not can_approve_for(current_user):
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+
+    data = request.get_json() or {}
+    action = data.get('action')
+    ids = data.get('ids', [])
+    if action not in ['approve', 'reject']:
+        return jsonify({'success': False, 'error': 'Acción inválida'}), 400
+    if not ids:
+        return jsonify({'success': False, 'error': 'No se han seleccionado solicitudes'}), 400
+
+    results = {'processed': 0, 'skipped': 0}
+    for vid in ids:
+        vacation = db.session.get(VacationRequest, int(vid))
+        if not vacation or vacation.status != 'pending' or vacation.user_id == current_user.id:
+            results['skipped'] += 1
+            continue
+        vacation.status = 'approved' if action == 'approve' else 'rejected'
+        vacation.reviewed_by = current_user.id
+        vacation.review_comment = data.get('comment', '')
+        vacation.reviewed_at = datetime.utcnow()
+        results['processed'] += 1
+        try:
+            notify_vacation_reviewed(vacation, action)
+        except Exception:
+            pass
+    db.session.commit()
+    log_audit(f'bulk_{action}', 'vacation', None, f"ids={ids}")
+    return jsonify({'success': True, **results})
 
 
 # ─────────────────────────────────────────────
@@ -772,6 +1116,11 @@ def update_user(user_id):
             user.role = data['role']
         if 'total_days' in data:
             user.total_days = data['total_days']
+        if 'hire_date' in data:
+            try:
+                user.hire_date = date_parser.parse(data['hire_date']).date() if data['hire_date'] else None
+            except (ValueError, TypeError):
+                pass
     if 'password' in data and data['password']:
         if len(data['password']) < 8:
             return jsonify({'success': False, 'error': 'La contraseña debe tener al menos 8 caracteres'}), 400
@@ -964,6 +1313,73 @@ def delete_department(dept_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/department-rules', methods=['GET'])
+@login_required
+def get_dept_rules():
+    rules = DepartmentRule.query.order_by(DepartmentRule.department).all()
+    return jsonify([r.to_dict() for r in rules])
+
+
+@app.route('/api/department-rules', methods=['POST'])
+@login_required
+def create_dept_rule():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    dept = data.get('department', '').strip()
+    if not dept:
+        return jsonify({'success': False, 'error': 'Departamento requerido'}), 400
+    existing = DepartmentRule.query.filter_by(department=dept).first()
+    if existing:
+        return jsonify({'success': False, 'error': 'Ya existe una regla para ese departamento'}), 400
+    bp = data.get('blackout_periods')
+    rule = DepartmentRule(
+        department=dept,
+        max_simultaneous=data.get('max_simultaneous') or None,
+        min_advance_days=data.get('min_advance_days') or None,
+        max_consecutive_days=data.get('max_consecutive_days') or None,
+        blackout_periods=json.dumps(bp) if bp else None,
+    )
+    db.session.add(rule)
+    db.session.commit()
+    log_audit('create_dept_rule', 'dept_rule', rule.id, f"dept={dept}")
+    return jsonify({'success': True, 'rule': rule.to_dict()})
+
+
+@app.route('/api/department-rules/<int:rule_id>', methods=['PUT'])
+@login_required
+def update_dept_rule(rule_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    rule = db.session.get(DepartmentRule, rule_id)
+    if not rule:
+        return jsonify({'success': False, 'error': 'Regla no encontrada'}), 404
+    data = request.get_json() or {}
+    if 'max_simultaneous' in data:
+        rule.max_simultaneous = data['max_simultaneous'] or None
+    if 'min_advance_days' in data:
+        rule.min_advance_days = data['min_advance_days'] or None
+    if 'max_consecutive_days' in data:
+        rule.max_consecutive_days = data['max_consecutive_days'] or None
+    if 'blackout_periods' in data:
+        rule.blackout_periods = json.dumps(data['blackout_periods']) if data['blackout_periods'] else None
+    db.session.commit()
+    return jsonify({'success': True, 'rule': rule.to_dict()})
+
+
+@app.route('/api/department-rules/<int:rule_id>', methods=['DELETE'])
+@login_required
+def delete_dept_rule(rule_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    rule = db.session.get(DepartmentRule, rule_id)
+    if not rule:
+        return jsonify({'success': False, 'error': 'Regla no encontrada'}), 404
+    db.session.delete(rule)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
 @app.route('/api/holidays', methods=['GET'])
 @login_required
 def get_holidays():
@@ -1107,6 +1523,189 @@ def update_settings():
     db.session.commit()
     log_audit('update_settings', 'settings', settings.id)
     return jsonify({'success': True, 'company_name': settings.company_name, 'logo_data': settings.logo_data})
+
+
+# ─────────────────────────────────────────────
+# API Routes — Vacation Balances
+# ─────────────────────────────────────────────
+
+@app.route('/api/balances', methods=['GET'])
+@login_required
+def get_balances():
+    user_id = request.args.get('user_id', type=int) or current_user.id
+    if user_id != current_user.id and current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    year = request.args.get('year', date.today().year, type=int)
+    balances = VacationBalance.query.filter_by(user_id=user_id, year=year).all()
+    return jsonify([b.to_dict() for b in balances])
+
+
+@app.route('/api/balances', methods=['POST'])
+@login_required
+def upsert_balance():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    year = data.get('year', date.today().year)
+    vtype = data.get('vacation_type', 'vacaciones')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'user_id requerido'}), 400
+    balance = VacationBalance.query.filter_by(user_id=user_id, year=year, vacation_type=vtype).first()
+    if not balance:
+        balance = VacationBalance(user_id=user_id, year=year, vacation_type=vtype)
+        db.session.add(balance)
+    balance.total_days = data.get('total_days', balance.total_days)
+    balance.carried_over = data.get('carried_over', balance.carried_over)
+    if 'carryover_expiry' in data and data['carryover_expiry']:
+        try:
+            balance.carryover_expiry = date_parser.parse(data['carryover_expiry']).date()
+        except (ValueError, TypeError):
+            pass
+    else:
+        balance.carryover_expiry = None
+    db.session.commit()
+    log_audit('upsert_balance', 'balance', balance.id, f"user={user_id} year={year} type={vtype}")
+    return jsonify({'success': True, 'balance': balance.to_dict()})
+
+
+@app.route('/api/balances/<int:balance_id>', methods=['DELETE'])
+@login_required
+def delete_balance(balance_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    balance = db.session.get(VacationBalance, balance_id)
+    if not balance:
+        return jsonify({'success': False, 'error': 'Balance no encontrado'}), 404
+    db.session.delete(balance)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ─────────────────────────────────────────────
+# API Routes — Delegations
+# ─────────────────────────────────────────────
+
+@app.route('/api/delegations', methods=['GET'])
+@login_required
+def get_delegations():
+    if current_user.role in ['admin', 'manager']:
+        delegations = ManagerDelegation.query.filter_by(active=True).all()
+    else:
+        delegations = ManagerDelegation.query.filter(
+            db.or_(
+                ManagerDelegation.delegator_id == current_user.id,
+                ManagerDelegation.delegate_id == current_user.id,
+            ),
+            ManagerDelegation.active == True,
+        ).all()
+    return jsonify([d.to_dict() for d in delegations])
+
+
+@app.route('/api/delegations', methods=['POST'])
+@login_required
+def create_delegation():
+    if current_user.role not in ['admin', 'manager']:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    try:
+        start = date_parser.parse(data['start_date']).date()
+        end = date_parser.parse(data['end_date']).date()
+    except (KeyError, ValueError):
+        return jsonify({'success': False, 'error': 'Fechas inválidas'}), 400
+    delegate_id = data.get('delegate_id')
+    if not delegate_id:
+        return jsonify({'success': False, 'error': 'delegate_id requerido'}), 400
+    delegator_id = data.get('delegator_id', current_user.id)
+    if delegator_id != current_user.id and current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    delegation = ManagerDelegation(
+        delegator_id=delegator_id,
+        delegate_id=delegate_id,
+        start_date=start,
+        end_date=end,
+    )
+    db.session.add(delegation)
+    db.session.commit()
+    log_audit('create_delegation', 'delegation', delegation.id)
+    return jsonify({'success': True, 'delegation': delegation.to_dict()})
+
+
+@app.route('/api/delegations/<int:deleg_id>', methods=['DELETE'])
+@login_required
+def delete_delegation(deleg_id):
+    delegation = db.session.get(ManagerDelegation, deleg_id)
+    if not delegation:
+        return jsonify({'success': False, 'error': 'Delegación no encontrada'}), 404
+    if delegation.delegator_id != current_user.id and current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    delegation.active = False
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ─────────────────────────────────────────────
+# API Routes — Absences & Reminders
+# ─────────────────────────────────────────────
+
+@app.route('/api/absences/today', methods=['GET'])
+@login_required
+def absences_today():
+    today = date.today()
+    vacations = VacationRequest.query.join(
+        User, User.id == VacationRequest.user_id
+    ).filter(
+        VacationRequest.status == 'approved',
+        VacationRequest.start_date <= today,
+        VacationRequest.end_date >= today,
+        User.is_deleted == False,
+    ).all()
+    return jsonify([v.to_dict() for v in vacations])
+
+
+@app.route('/api/absences/upcoming', methods=['GET'])
+@login_required
+def absences_upcoming():
+    today = date.today()
+    days_ahead = request.args.get('days', 7, type=int)
+    until = today + timedelta(days=days_ahead)
+    vacations = VacationRequest.query.join(
+        User, User.id == VacationRequest.user_id
+    ).filter(
+        VacationRequest.status == 'approved',
+        VacationRequest.start_date > today,
+        VacationRequest.start_date <= until,
+        User.is_deleted == False,
+    ).order_by(VacationRequest.start_date).all()
+    return jsonify([v.to_dict() for v in vacations])
+
+
+@app.route('/api/admin/send-reminders', methods=['GET'])
+def send_reminders():
+    cron_key = os.environ.get('CRON_KEY')
+    if cron_key and request.args.get('key') != cron_key:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    elif not cron_key:
+        if not current_user.is_authenticated or current_user.role != 'admin':
+            return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    tomorrow = date.today() + timedelta(days=1)
+    vacations = VacationRequest.query.filter(
+        VacationRequest.status == 'approved',
+        VacationRequest.start_date == tomorrow,
+    ).all()
+    sent = 0
+    for v in vacations:
+        employee = db.session.get(User, v.user_id)
+        if employee and not employee.is_deleted:
+            send_email(
+                employee.email,
+                "Recordatorio: tus vacaciones empiezan mañana",
+                f"Hola {employee.first_name},\n\n"
+                f"Tus vacaciones del {fmt_date(v.start_date)} al {fmt_date(v.end_date)} "
+                f"({v.business_days} días hábiles) empiezan mañana.\n\n¡Que las disfrutes!\n\n— VacationControl",
+            )
+            sent += 1
+    return jsonify({'success': True, 'reminders_sent': sent, 'date': tomorrow.isoformat()})
 
 
 # ─────────────────────────────────────────────

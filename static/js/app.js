@@ -471,6 +471,10 @@ function renderLayout() {
                     <span class="nav-icon">⏰</span>
                     <span>Control Retrasos</span>
                 </div>
+                <div class="nav-item" data-page="delegations">
+                    <span class="nav-icon">🔁</span>
+                    <span>Delegaciones</span>
+                </div>
                 ` : ''}
                 ${isAdmin ? `
                 <div class="nav-section-title">Administración</div>
@@ -563,6 +567,9 @@ async function renderPage() {
             case 'late-arrivals':
                 await loadLateArrivals(main);
                 break;
+            case 'delegations':
+                await loadDelegations(main);
+                break;
             default:
                 await loadDashboard(main);
         }
@@ -577,11 +584,11 @@ async function renderPage() {
 async function updatePendingBadge() {
     try {
         const vacations = await api('/api/vacations');
-        const pending = vacations.filter(v => v.status === 'pending').length;
+        const count = vacations.filter(v => v.status === 'pending' || v.status === 'cancel_requested').length;
         const badge = document.getElementById('pendingBadge');
         if (badge) {
-            badge.textContent = pending;
-            badge.style.display = pending > 0 ? 'inline' : 'none';
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'inline' : 'none';
         }
     } catch (e) { /* ignore */ }
 }
@@ -591,15 +598,19 @@ async function updatePendingBadge() {
 // ─────────────────────────────────────────────
 
 async function loadDashboard(container) {
-    const [stats, vacations] = await Promise.all([
+    const [stats, vacations, absToday, absUpcoming] = await Promise.all([
         api('/api/stats'),
-        api('/api/vacations')
+        api('/api/vacations'),
+        api('/api/absences/today'),
+        api('/api/absences/upcoming?days=7'),
     ]);
     State.stats = stats;
     State.vacations = vacations;
 
     const u = State.user;
     const isManager = u.role === 'admin' || u.role === 'manager';
+    const allocDays = u.allocated_days || u.total_days;
+    const pct = allocDays > 0 ? (u.days_used / allocDays) * 100 : 0;
 
     container.innerHTML = `
     <div class="page-enter">
@@ -614,8 +625,8 @@ async function loadDashboard(container) {
                 <div class="stat-value">${u.days_remaining}</div>
                 <div class="stat-label">Días Disponibles</div>
                 <div class="progress-bar">
-                    <div class="progress-fill ${u.days_used / u.total_days > 0.8 ? 'high' : u.days_used / u.total_days > 0.5 ? 'medium' : ''}" 
-                         style="width: ${(u.days_used / u.total_days) * 100}%"></div>
+                    <div class="progress-fill ${pct > 80 ? 'high' : pct > 50 ? 'medium' : ''}"
+                         style="width: ${pct}%"></div>
                 </div>
             </div>
             <div class="stat-card success">
@@ -630,7 +641,7 @@ async function loadDashboard(container) {
             </div>
             <div class="stat-card info">
                 <div class="stat-icon">📅</div>
-                <div class="stat-value">${u.total_days}</div>
+                <div class="stat-value">${allocDays}</div>
                 <div class="stat-label">Total Asignado</div>
             </div>
         </div>
@@ -656,6 +667,47 @@ async function loadDashboard(container) {
                 <div class="stat-icon">❌</div>
                 <div class="stat-value">${stats.rejected_requests}</div>
                 <div class="stat-label">Rechazadas</div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg);">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>🏖️ Ausentes Hoy</h2>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">${absToday.length} persona(s)</span>
+                </div>
+                <div class="panel-body">
+                    ${absToday.length === 0
+                        ? '<p style="color:var(--text-muted);font-size:0.85rem;">Nadie está de vacaciones hoy.</p>'
+                        : absToday.map(v => `
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
+                                <div>
+                                    <div style="font-weight:600;font-size:0.85rem;">${esc(v.employee_name)}</div>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);">hasta ${formatDate(v.end_date)}</div>
+                                </div>
+                            </div>`).join('')
+                    }
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>📅 Próximas Ausencias</h2>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">Próximos 7 días</span>
+                </div>
+                <div class="panel-body">
+                    ${absUpcoming.length === 0
+                        ? '<p style="color:var(--text-muted);font-size:0.85rem;">Sin ausencias previstas esta semana.</p>'
+                        : absUpcoming.map(v => `
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
+                                <div>
+                                    <div style="font-weight:600;font-size:0.85rem;">${esc(v.employee_name)}</div>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);">${formatDate(v.start_date)} — ${formatDate(v.end_date)}</div>
+                                </div>
+                            </div>`).join('')
+                    }
+                </div>
             </div>
         </div>
         ` : ''}
@@ -752,6 +804,7 @@ function renderVacationTable(vacations, showActions = false) {
     <table class="data-table">
         <thead>
             <tr>
+                ${showActions && isManager ? '<th style="width:36px;"><input type="checkbox" id="selectAllVac" onchange="toggleSelectAllVacations(this)" title="Seleccionar todas las pendientes"></th>' : ''}
                 <th>Empleado</th>
                 <th>Fechas</th>
                 <th>Tipo</th>
@@ -763,6 +816,7 @@ function renderVacationTable(vacations, showActions = false) {
         <tbody>
             ${vacations.map(v => `
             <tr>
+                ${showActions && isManager ? `<td>${v.status === 'pending' && v.user_id !== State.user.id ? `<input type="checkbox" class="vac-select" value="${v.id}">` : ''}</td>` : ''}
                 <td>
                     <div style="display: flex; align-items: center; gap: var(--space-sm);">
                         ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
@@ -774,15 +828,21 @@ function renderVacationTable(vacations, showActions = false) {
                 </td>
                 <td>
                     <div style="font-size: 0.85rem;">${formatDate(v.start_date)} — ${formatDate(v.end_date)}</div>
+                    ${v.reason ? `<div style="font-size:0.75rem;color:var(--text-muted);">${esc(v.reason)}</div>` : ''}
                 </td>
                 <td><span class="type-badge">${translateType(v.vacation_type)}</span></td>
                 <td><span style="font-weight: 700;">${v.business_days}</span></td>
                 <td><span class="status-badge ${v.status}">${translateStatus(v.status)}</span></td>
-                ${showActions && isManager && v.status === 'pending' ? `
+                ${showActions && isManager ? `
                 <td>
                     <div class="action-btns">
-                        <button class="btn btn-success btn-sm" onclick="reviewVacation(${v.id}, 'approve')" title="Aprobar">✅</button>
-                        <button class="btn btn-danger btn-sm" onclick="reviewVacation(${v.id}, 'reject')" title="Rechazar">❌</button>
+                        ${v.status === 'pending' && v.user_id !== State.user.id ? `
+                            <button class="btn btn-success btn-sm" onclick="reviewVacation(${v.id}, 'approve')" title="Aprobar">✅</button>
+                            <button class="btn btn-danger btn-sm" onclick="reviewVacation(${v.id}, 'reject')" title="Rechazar">❌</button>
+                        ` : v.status === 'cancel_requested' ? `
+                            <button class="btn btn-success btn-sm" onclick="reviewCancelVacation(${v.id}, 'approve')" title="Aprobar cancelación">✅ Cancelar</button>
+                            <button class="btn btn-secondary btn-sm" onclick="reviewCancelVacation(${v.id}, 'reject')" title="Rechazar cancelación">↩ Mantener</button>
+                        ` : '—'}
                     </div>
                 </td>
                 ` : showActions ? '<td></td>' : ''}
@@ -1046,9 +1106,13 @@ function renderMyVacationsTable(vacations) {
                 <td style="color: var(--text-muted); font-size: 0.85rem;">${esc(v.reason) || '—'}</td>
                 <td><span class="status-badge ${v.status}">${translateStatus(v.status)}</span></td>
                 <td>
-                    ${v.status === 'pending' ? 
-                        `<button class="btn btn-danger btn-sm" onclick="deleteVacation(${v.id})">Cancelar</button>` :
-                        '—'}
+                    ${v.status === 'pending'
+                        ? `<button class="btn btn-danger btn-sm" onclick="deleteVacation(${v.id})">Retirar</button>`
+                        : v.status === 'approved'
+                        ? `<button class="btn btn-warning btn-sm" onclick="openRequestCancelModal(${v.id})">Solicitar cancelación</button>`
+                        : v.status === 'cancel_requested'
+                        ? `<span style="font-size:0.78rem;color:var(--text-muted);">Cancelación en revisión</span>`
+                        : '—'}
                 </td>
             </tr>`).join('')}
         </tbody>
@@ -1064,6 +1128,8 @@ async function loadRequests(container) {
     State.vacations = vacations;
 
     const filtered = State.filterStatus === 'all' ? vacations : vacations.filter(v => v.status === State.filterStatus);
+    const pendingCount = vacations.filter(v => v.status === 'pending').length;
+    const cancelCount = vacations.filter(v => v.status === 'cancel_requested').length;
 
     container.innerHTML = `
     <div class="page-enter">
@@ -1073,15 +1139,19 @@ async function loadRequests(container) {
                     <h1>📋 Solicitudes de Vacaciones</h1>
                     <p>Revisa y gestiona las solicitudes del equipo</p>
                 </div>
-                <button class="btn btn-secondary" onclick="exportVacations()">📥 Exportar CSV</button>
+                <div style="display:flex;gap:8px;">
+                    ${pendingCount > 0 ? `<button class="btn btn-success btn-sm" onclick="bulkApproveSelected()">✅ Aprobar seleccionadas</button>` : ''}
+                    <button class="btn btn-secondary" onclick="exportVacations()">📥 Exportar CSV</button>
+                </div>
             </div>
         </div>
 
         <div class="filters-bar">
             <span class="filter-chip ${State.filterStatus === 'all' ? 'active' : ''}" onclick="setFilter('all')">Todas (${vacations.length})</span>
-            <span class="filter-chip ${State.filterStatus === 'pending' ? 'active' : ''}" onclick="setFilter('pending')">Pendientes (${vacations.filter(v => v.status === 'pending').length})</span>
+            <span class="filter-chip ${State.filterStatus === 'pending' ? 'active' : ''}" onclick="setFilter('pending')">Pendientes (${pendingCount})</span>
             <span class="filter-chip ${State.filterStatus === 'approved' ? 'active' : ''}" onclick="setFilter('approved')">Aprobadas (${vacations.filter(v => v.status === 'approved').length})</span>
             <span class="filter-chip ${State.filterStatus === 'rejected' ? 'active' : ''}" onclick="setFilter('rejected')">Rechazadas (${vacations.filter(v => v.status === 'rejected').length})</span>
+            ${cancelCount > 0 ? `<span class="filter-chip ${State.filterStatus === 'cancel_requested' ? 'active' : ''}" onclick="setFilter('cancel_requested')">Cancelaciones (${cancelCount})</span>` : ''}
         </div>
 
         <div class="panel">
@@ -1111,7 +1181,106 @@ window.reviewVacation = async function(id, action) {
             body: JSON.stringify({ action, comment: '' })
         });
         showToast(`Solicitud ${action === 'approve' ? 'aprobada' : 'rechazada'}`, 'success');
-        // Refresh user data
+        const me = await api('/api/me');
+        if (me.authenticated) State.user = me.user;
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+};
+
+window.toggleSelectAllVacations = function(checkbox) {
+    document.querySelectorAll('.vac-select').forEach(cb => { cb.checked = checkbox.checked; });
+};
+
+window.bulkApproveSelected = function() {
+    const selected = [...document.querySelectorAll('.vac-select:checked')].map(cb => parseInt(cb.value));
+    if (selected.length === 0) { showToast('Selecciona al menos una solicitud', 'error'); return; }
+    openModal(`
+    <div class="modal">
+        <div class="modal-header">
+            <h3>✅ Aprobación Masiva (${selected.length} solicitudes)</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Aprobar las ${selected.length} solicitudes seleccionadas?</p>
+            <div class="form-group">
+                <label>Comentario (opcional)</label>
+                <input type="text" class="form-input" id="bulkComment" placeholder="Comentario para todas las solicitudes...">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-success" onclick="submitBulkReview('approve', ${JSON.stringify(selected)})">Aprobar todas</button>
+            <button class="btn btn-danger" onclick="submitBulkReview('reject', ${JSON.stringify(selected)})">Rechazar todas</button>
+        </div>
+    </div>`);
+};
+
+window.submitBulkReview = async function(action, ids) {
+    const comment = document.getElementById('bulkComment')?.value || '';
+    try {
+        const res = await api('/api/vacations/bulk-review', {
+            method: 'POST',
+            body: JSON.stringify({ action, ids, comment })
+        });
+        closeModal();
+        showToast(`${res.processed} solicitudes ${action === 'approve' ? 'aprobadas' : 'rechazadas'}${res.skipped > 0 ? `, ${res.skipped} omitidas` : ''}`, 'success');
+        const me = await api('/api/me');
+        if (me.authenticated) State.user = me.user;
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+};
+
+window.openRequestCancelModal = function(vacationId) {
+    openModal(`
+    <div class="modal">
+        <div class="modal-header">
+            <h3>🚫 Solicitar Cancelación</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px;">
+                Tu manager recibirá la solicitud de cancelación y deberá aprobarla.
+            </p>
+            <div class="form-group">
+                <label>Motivo de la cancelación</label>
+                <textarea class="form-input" id="cancelReason" placeholder="Describe brevemente el motivo..." rows="3"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-danger" onclick="submitRequestCancel(${vacationId})">Solicitar cancelación</button>
+        </div>
+    </div>`);
+};
+
+window.submitRequestCancel = async function(vacationId) {
+    const reason = document.getElementById('cancelReason')?.value || '';
+    try {
+        await api(`/api/vacations/${vacationId}/request-cancel`, {
+            method: 'POST',
+            body: JSON.stringify({ reason })
+        });
+        closeModal();
+        showToast('Solicitud de cancelación enviada al manager', 'success');
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+};
+
+window.reviewCancelVacation = async function(vacationId, action) {
+    const label = action === 'approve' ? 'aprobar la cancelación (las vacaciones quedarán canceladas)' : 'rechazar la cancelación (las vacaciones seguirán aprobadas)';
+    if (!confirm(`¿${label}?`)) return;
+    try {
+        await api(`/api/vacations/${vacationId}/review-cancel`, {
+            method: 'POST',
+            body: JSON.stringify({ action })
+        });
+        showToast(action === 'approve' ? 'Vacaciones canceladas' : 'Cancelación rechazada, vacaciones mantenidas', 'success');
         const me = await api('/api/me');
         if (me.authenticated) State.user = me.user;
         renderPage();
@@ -1443,8 +1612,14 @@ async function loadHolidays(container) {
 // ─────────────────────────────────────────────
 
 async function loadDepartments(container) {
-    const depts = await api('/api/departments');
+    const [depts, rules] = await Promise.all([
+        api('/api/departments'),
+        api('/api/department-rules'),
+    ]);
     State.departments = depts;
+
+    const ruleByDept = {};
+    rules.forEach(r => { ruleByDept[r.department] = r; });
 
     container.innerHTML = `
     <div class="page-enter">
@@ -1452,7 +1627,7 @@ async function loadDepartments(container) {
             <div class="page-header-actions">
                 <div>
                     <h1>🏢 Configuración de Departamentos</h1>
-                    <p>Gestiona las áreas de la empresa</p>
+                    <p>Gestiona las áreas de la empresa y sus reglas de vacaciones</p>
                 </div>
                 <button class="btn btn-primary" onclick="openNewDeptModal()">+ Nuevo Departamento</button>
             </div>
@@ -1465,21 +1640,30 @@ async function loadDepartments(container) {
                         <tr>
                             <th>Nombre</th>
                             <th>Descripción</th>
+                            <th>Máx. Simultáneos</th>
+                            <th>Antelación mín.</th>
+                            <th>Máx. consecutivos</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${depts.map(d => `
+                        ${depts.map(d => {
+                            const rule = ruleByDept[d.name];
+                            return `
                         <tr>
                             <td style="font-weight: 600;">${esc(d.name)}</td>
                             <td style="color: var(--text-muted);">${esc(d.description) || '—'}</td>
+                            <td>${rule?.max_simultaneous ?? '<span style="color:var(--text-dim)">—</span>'}</td>
+                            <td>${rule?.min_advance_days ? rule.min_advance_days + ' días' : '<span style="color:var(--text-dim)">—</span>'}</td>
+                            <td>${rule?.max_consecutive_days ? rule.max_consecutive_days + ' días' : '<span style="color:var(--text-dim)">—</span>'}</td>
                             <td>
                                 <div class="action-btns">
                                     <button class="btn btn-secondary btn-sm" onclick="openEditDeptModal(${d.id})">✏️</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="openDeptRulesModal('${esc(d.name)}', ${rule ? rule.id : 'null'}, ${JSON.stringify(rule || {}).replace(/"/g,'&quot;')})" title="Configurar reglas">⚙️ Reglas</button>
                                     <button class="btn btn-danger btn-sm" onclick="deleteDepartment(${d.id})">🗑️</button>
                                 </div>
                             </td>
-                        </tr>`).join('')}
+                        </tr>`;}).join('')}
                     </tbody>
                 </table>
             </div>
@@ -1575,6 +1759,80 @@ window.deleteDepartment = async function(id) {
         showToast('Departamento eliminado', 'success');
         renderPage();
     } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.openDeptRulesModal = function(deptName, ruleId, rule) {
+    const r = typeof rule === 'string' ? JSON.parse(rule.replace(/&quot;/g, '"')) : rule;
+    openModal(`
+    <div class="modal">
+        <div class="modal-header">
+            <h3>⚙️ Reglas — ${esc(deptName)}</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Máx. personas simultáneas</label>
+                    <input type="number" class="form-input" id="ruleMaxSim" value="${r.max_simultaneous || ''}" placeholder="Sin límite" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Antelación mínima (días)</label>
+                    <input type="number" class="form-input" id="ruleMinAdv" value="${r.min_advance_days || ''}" placeholder="Sin mínimo" min="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Máx. días consecutivos</label>
+                <input type="number" class="form-input" id="ruleMaxCons" value="${r.max_consecutive_days || ''}" placeholder="Sin límite" min="1">
+            </div>
+            <div class="form-group">
+                <label>Períodos bloqueados (JSON)</label>
+                <textarea class="form-input" id="ruleBlackouts" rows="3" placeholder='[{"start":"2026-08-01","end":"2026-08-31","reason":"Temporada alta"}]'>${r.blackout_periods ? JSON.stringify(r.blackout_periods) : ''}</textarea>
+                <small style="color:var(--text-dim);">Formato: [{start, end, reason}]</small>
+            </div>
+        </div>
+        <div class="modal-footer">
+            ${ruleId ? `<button class="btn btn-danger btn-sm" onclick="deleteDeptRule(${ruleId})">Eliminar reglas</button>` : ''}
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveDeptRule('${esc(deptName)}', ${ruleId || 'null'})">Guardar</button>
+        </div>
+    </div>`);
+};
+
+window.saveDeptRule = async function(dept, ruleId) {
+    const maxSim = parseInt(document.getElementById('ruleMaxSim').value) || null;
+    const minAdv = parseInt(document.getElementById('ruleMinAdv').value) || null;
+    const maxCons = parseInt(document.getElementById('ruleMaxCons').value) || null;
+    let blackouts = null;
+    const bpStr = document.getElementById('ruleBlackouts').value.trim();
+    if (bpStr) {
+        try { blackouts = JSON.parse(bpStr); } catch(e) { showToast('JSON de períodos bloqueados inválido', 'error'); return; }
+    }
+    try {
+        if (ruleId) {
+            await api(`/api/department-rules/${ruleId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ max_simultaneous: maxSim, min_advance_days: minAdv, max_consecutive_days: maxCons, blackout_periods: blackouts }),
+            });
+        } else {
+            await api('/api/department-rules', {
+                method: 'POST',
+                body: JSON.stringify({ department: dept, max_simultaneous: maxSim, min_advance_days: minAdv, max_consecutive_days: maxCons, blackout_periods: blackouts }),
+            });
+        }
+        closeModal();
+        showToast('Reglas guardadas', 'success');
+        renderPage();
+    } catch(err) { showToast(err.message, 'error'); }
+};
+
+window.deleteDeptRule = async function(ruleId) {
+    if (!confirm('¿Eliminar todas las reglas de este departamento?')) return;
+    try {
+        await api(`/api/department-rules/${ruleId}`, { method: 'DELETE' });
+        closeModal();
+        showToast('Reglas eliminadas', 'success');
+        renderPage();
+    } catch(err) { showToast(err.message, 'error'); }
 };
 
 // ─────────────────────────────────────────────
@@ -1729,6 +1987,123 @@ window.deleteLateArrival = async function(id) {
 };
 
 // ─────────────────────────────────────────────
+// Delegations Page
+// ─────────────────────────────────────────────
+
+async function loadDelegations(container) {
+    const [delegations, users] = await Promise.all([
+        api('/api/delegations'),
+        api('/api/users'),
+    ]);
+    const today = new Date().toISOString().split('T')[0];
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header">
+            <div class="page-header-actions">
+                <div>
+                    <h1>🔁 Delegaciones de Aprobación</h1>
+                    <p>Delega tu autoridad de aprobación en otro manager durante un período</p>
+                </div>
+                <button class="btn btn-primary" onclick="openNewDelegationModal()">+ Nueva Delegación</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-body no-padding">
+                ${delegations.length === 0
+                    ? '<div class="empty-state"><div class="empty-icon">🔁</div><h3>Sin delegaciones activas</h3><p>No hay delegaciones configuradas.</p></div>'
+                    : `<table class="data-table">
+                        <thead><tr>
+                            <th>Delegante</th>
+                            <th>Delegado en</th>
+                            <th>Desde</th>
+                            <th>Hasta</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr></thead>
+                        <tbody>
+                        ${delegations.map(d => {
+                            const isActive = d.start_date <= today && d.end_date >= today;
+                            return `<tr>
+                                <td style="font-weight:600;">${esc(d.delegator_name)}</td>
+                                <td>${esc(d.delegate_name)}</td>
+                                <td>${formatDate(d.start_date)}</td>
+                                <td>${formatDate(d.end_date)}</td>
+                                <td><span class="status-badge ${isActive ? 'approved' : 'rejected'}">${isActive ? 'Activa' : 'Inactiva'}</span></td>
+                                <td><button class="btn btn-danger btn-sm" onclick="deleteDelegation(${d.id})">🗑️</button></td>
+                            </tr>`;
+                        }).join('')}
+                        </tbody>
+                    </table>`
+                }
+            </div>
+        </div>
+    </div>`;
+}
+
+window.openNewDelegationModal = async function() {
+    const users = await api('/api/users');
+    const managers = users.filter(u => u.role === 'admin' || u.role === 'manager');
+    const today = new Date().toISOString().split('T')[0];
+    openModal(`
+    <div class="modal">
+        <div class="modal-header">
+            <h3>🔁 Nueva Delegación</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Delegar en</label>
+                <select class="form-select" id="delegateUserId">
+                    ${users.filter(u => u.id !== State.user.id).map(u => `<option value="${u.id}">${esc(u.full_name)} (${translateRole(u.role)})</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Fecha inicio</label>
+                    <input type="date" class="form-input" id="delegStart" value="${today}" min="${today}" required>
+                </div>
+                <div class="form-group">
+                    <label>Fecha fin</label>
+                    <input type="date" class="form-input" id="delegEnd" value="${today}" min="${today}" required>
+                </div>
+            </div>
+            <p style="font-size:0.8rem;color:var(--text-muted);">Durante este período, el usuario seleccionado podrá aprobar y rechazar solicitudes en tu nombre.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitNewDelegation()">Crear Delegación</button>
+        </div>
+    </div>`);
+};
+
+window.submitNewDelegation = async function() {
+    const delegate_id = document.getElementById('delegateUserId').value;
+    const start_date = document.getElementById('delegStart').value;
+    const end_date = document.getElementById('delegEnd').value;
+    if (!start_date || !end_date) { showToast('Selecciona las fechas', 'error'); return; }
+    try {
+        await api('/api/delegations', {
+            method: 'POST',
+            body: JSON.stringify({ delegate_id, start_date, end_date }),
+        });
+        closeModal();
+        showToast('Delegación creada', 'success');
+        renderPage();
+    } catch(err) { showToast(err.message, 'error'); }
+};
+
+window.deleteDelegation = async function(id) {
+    if (!confirm('¿Desactivar esta delegación?')) return;
+    try {
+        await api(`/api/delegations/${id}`, { method: 'DELETE' });
+        showToast('Delegación desactivada', 'success');
+        renderPage();
+    } catch(err) { showToast(err.message, 'error'); }
+};
+
+// ─────────────────────────────────────────────
 // Modals
 // ─────────────────────────────────────────────
 
@@ -1749,7 +2124,40 @@ function closeModal() {
 
 window.closeModal = closeModal;
 
-window.openNewVacationModal = function() {
+function calcBusinessDays(startStr, endStr) {
+    if (!startStr || !endStr) return 0;
+    const holidays = (State.holidays || []).map(h => h.date);
+    let days = 0;
+    let current = new Date(startStr + 'T00:00:00');
+    const end = new Date(endStr + 'T00:00:00');
+    while (current <= end) {
+        const dow = current.getDay();
+        const ds = current.toISOString().split('T')[0];
+        if (dow !== 0 && dow !== 6 && !holidays.includes(ds)) days++;
+        current.setDate(current.getDate() + 1);
+    }
+    return days;
+}
+
+function updateVacDayCounter() {
+    const start = document.getElementById('vacStartDate')?.value;
+    const end = document.getElementById('vacEndDate')?.value;
+    const counter = document.getElementById('vacDayCounter');
+    if (!counter) return;
+    if (!start || !end || end < start) { counter.innerHTML = ''; return; }
+    const days = calcBusinessDays(start, end);
+    const remaining = State.user.days_remaining;
+    const after = remaining - days;
+    const color = after < 0 ? 'var(--color-danger)' : after <= 2 ? 'var(--color-warning)' : 'var(--color-success)';
+    counter.innerHTML = `<span style="background:rgba(255,255,255,0.06);border-radius:8px;padding:8px 12px;display:block;font-size:0.85rem;">
+        <strong>${days}</strong> día(s) hábil(es) · Disponibles: <strong>${remaining}</strong> · Quedarían: <strong style="color:${color}">${after}</strong>
+    </span>`;
+}
+
+window.openNewVacationModal = async function() {
+    if (!State.holidays || State.holidays.length === 0) {
+        try { State.holidays = await api(`/api/holidays?year=${new Date().getFullYear()}`); } catch(e) {}
+    }
     openModal(`
     <div class="modal">
         <div class="modal-header">
@@ -1761,13 +2169,14 @@ window.openNewVacationModal = function() {
                 <div class="form-row">
                     <div class="form-group">
                         <label>Fecha Inicio</label>
-                        <input type="date" class="form-input" id="vacStartDate" required>
+                        <input type="date" class="form-input" id="vacStartDate" required oninput="updateVacDayCounter()">
                     </div>
                     <div class="form-group">
                         <label>Fecha Fin</label>
-                        <input type="date" class="form-input" id="vacEndDate" required>
+                        <input type="date" class="form-input" id="vacEndDate" required oninput="updateVacDayCounter()">
                     </div>
                 </div>
+                <div id="vacDayCounter" style="margin-bottom:12px;"></div>
                 <div class="form-group">
                     <label>Tipo</label>
                     <select class="form-select" id="vacType">
@@ -1790,7 +2199,6 @@ window.openNewVacationModal = function() {
         </div>
     </div>`);
 
-    // Set min date to today
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('vacStartDate').min = today;
     document.getElementById('vacEndDate').min = today;
@@ -1800,7 +2208,9 @@ window.openNewVacationModal = function() {
         if (document.getElementById('vacEndDate').value < e.target.value) {
             document.getElementById('vacEndDate').value = e.target.value;
         }
+        updateVacDayCounter();
     });
+    document.getElementById('vacEndDate').addEventListener('change', updateVacDayCounter);
 };
 
 window.submitNewVacation = async function() {
@@ -2123,7 +2533,13 @@ window.deleteHoliday = async function(id) {
 // ─────────────────────────────────────────────
 
 function translateStatus(status) {
-    const map = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
+    const map = {
+        pending: 'Pendiente',
+        approved: 'Aprobada',
+        rejected: 'Rechazada',
+        cancel_requested: 'Cancelación Pendiente',
+        cancelled: 'Cancelada',
+    };
     return map[status] || status;
 }
 

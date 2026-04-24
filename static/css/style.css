@@ -402,6 +402,17 @@ textarea.form-input {
     transform: translateY(-1px);
 }
 
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    color: white;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.btn-warning:hover {
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+    transform: translateY(-1px);
+}
+
 .btn-sm {
     padding: 8px 14px;
     font-size: 0.8rem;
@@ -859,6 +870,27 @@ textarea.form-input {
 
 .status-badge.rejected::before {
     background: var(--color-danger);
+}
+
+.status-badge.cancel_requested {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-badge.cancel_requested::before {
+    background: #f59e0b;
+    animation: statusPulse 1.5s ease-in-out infinite;
+}
+
+.status-badge.cancelled {
+    background: rgba(107, 114, 128, 0.12);
+    color: #9ca3af;
+    border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+.status-badge.cancelled::before {
+    background: #9ca3af;
 }
 
 @keyframes statusPulse {
