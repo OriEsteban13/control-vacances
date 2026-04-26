@@ -735,6 +735,7 @@ async function loadDashboard(container) {
                 <div class="stat-label">Rechazadas</div>
             </div>
         </div>
+        ` : ''}
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg);">
             <div class="panel">
@@ -776,9 +777,8 @@ async function loadDashboard(container) {
                 </div>
             </div>
         </div>
-        ` : ''}
 
-        <div style="display: grid; grid-template-columns: ${isManager ? '1fr 1fr' : '1fr'}; gap: var(--space-lg);">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg);">
             <div class="panel">
                 <div class="panel-header">
                     <h2>📈 Vacaciones por Mes</h2>
@@ -790,7 +790,6 @@ async function loadDashboard(container) {
                 </div>
             </div>
 
-            ${isManager ? `
             <div class="panel">
                 <div class="panel-header">
                     <h2>🏢 Por Departamento</h2>
@@ -799,7 +798,6 @@ async function loadDashboard(container) {
                     ${renderDepartmentStats(stats.departments)}
                 </div>
             </div>
-            ` : ''}
         </div>
 
         <div class="panel">
