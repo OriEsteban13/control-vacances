@@ -20,11 +20,69 @@ const State = {
     stats: null,
     calendarYear: new Date().getFullYear(),
     calendarMonth: new Date().getMonth() + 1,
-    calendarViewType: 'monthly', // monthly, quarterly, annual
+    calendarViewType: 'monthly',
     calendarUserId: null,
     filterStatus: 'all',
     selectedEmployeeId: null,
+    lang: localStorage.getItem('lang') || 'es',
 };
+
+// ─────────────────────────────────────────────
+// i18n
+// ─────────────────────────────────────────────
+
+const _tr = {
+    es: {
+        dashboard: 'Dashboard', calendar: 'Calendario', my_vacations: 'Mis Vacaciones',
+        requests: 'Solicitudes', team: 'Equipo', late_arrivals: 'Control Retrasos',
+        delegations: 'Delegaciones', employees: 'Empleados', holidays: 'Festivos',
+        departments: 'Departamentos', settings: 'Configuración',
+        pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada',
+        cancel_requested: 'Cancelación Pendiente', cancelled: 'Cancelada',
+        admin: 'Administrador', manager: 'Manager', employee: 'Empleado',
+        available_days: 'Días Disponibles', used_days: 'Días Usados',
+        pending_days: 'Días Pendientes', total_assigned: 'Total Asignado',
+        new_request: '+ Nueva Solicitud', save: 'Guardar', cancel: 'Cancelar',
+        profile_photo: 'Foto de Perfil', personal_info: 'Información Personal',
+        change_password: 'Cambiar Contraseña', language: 'Idioma',
+        first_name: 'Nombre', last_name: 'Apellido', email: 'Email',
+        current_password: 'Contraseña actual', new_password: 'Nueva contraseña (mín. 8 car.)',
+        confirm_password: 'Confirmar contraseña',
+        hello: '¡Hola', manage_profile: 'Gestiona tu perfil y preferencias',
+        click_photo: 'Haz clic en la foto para cambiarla',
+        passwords_no_match: 'Las contraseñas no coinciden', min_8: 'Mínimo 8 caracteres',
+        profile_updated: 'Perfil actualizado', password_updated: 'Contraseña actualizada',
+        name_required: 'El nombre es obligatorio', save_changes: 'Guardar Cambios',
+        lang_changed: 'Idioma cambiado a Castellano',
+    },
+    en: {
+        dashboard: 'Dashboard', calendar: 'Calendar', my_vacations: 'My Vacations',
+        requests: 'Requests', team: 'Team', late_arrivals: 'Late Arrivals',
+        delegations: 'Delegations', employees: 'Employees', holidays: 'Public Holidays',
+        departments: 'Departments', settings: 'Settings',
+        pending: 'Pending', approved: 'Approved', rejected: 'Rejected',
+        cancel_requested: 'Cancellation Pending', cancelled: 'Cancelled',
+        admin: 'Administrator', manager: 'Manager', employee: 'Employee',
+        available_days: 'Available Days', used_days: 'Days Used',
+        pending_days: 'Pending Days', total_assigned: 'Total Assigned',
+        new_request: '+ New Request', save: 'Save', cancel: 'Cancel',
+        profile_photo: 'Profile Photo', personal_info: 'Personal Information',
+        change_password: 'Change Password', language: 'Language',
+        first_name: 'First Name', last_name: 'Last Name', email: 'Email',
+        current_password: 'Current password', new_password: 'New password (min. 8 char.)',
+        confirm_password: 'Confirm password',
+        hello: 'Hello', manage_profile: 'Manage your profile and preferences',
+        click_photo: 'Click on the photo to change it',
+        passwords_no_match: 'Passwords do not match', min_8: 'Minimum 8 characters',
+        profile_updated: 'Profile updated', password_updated: 'Password updated',
+        name_required: 'Name is required', save_changes: 'Save Changes',
+        lang_changed: 'Language changed to English',
+    },
+};
+
+function t(key) {
+    return _tr[State.lang]?.[key] ?? _tr.es[key] ?? key;
+}
 
 let _pendingAvatarImage = undefined;
 let _csrfToken = null;
@@ -443,54 +501,59 @@ function renderLayout() {
                 </div>
             </div>
             <nav class="sidebar-nav">
-                <div class="nav-section-title">Principal</div>
+                <div class="nav-section-title">${State.lang === 'en' ? 'Main' : 'Principal'}</div>
                 <div class="nav-item active" data-page="dashboard">
                     <span class="nav-icon">📊</span>
-                    <span>Dashboard</span>
+                    <span>${t('dashboard')}</span>
                 </div>
                 <div class="nav-item" data-page="calendar">
                     <span class="nav-icon">📅</span>
-                    <span>Calendario</span>
+                    <span>${t('calendar')}</span>
                 </div>
                 <div class="nav-item" data-page="my-vacations">
                     <span class="nav-icon">🏖️</span>
-                    <span>Mis Vacaciones</span>
+                    <span>${t('my_vacations')}</span>
                 </div>
                 ${isManager ? `
-                <div class="nav-section-title">Gestión</div>
+                <div class="nav-section-title">${State.lang === 'en' ? 'Management' : 'Gestión'}</div>
                 <div class="nav-item" data-page="requests">
                     <span class="nav-icon">📋</span>
-                    <span>Solicitudes</span>
+                    <span>${t('requests')}</span>
                     <span class="nav-badge" id="pendingBadge" style="display:none">0</span>
                 </div>
                 <div class="nav-item" data-page="team">
                     <span class="nav-icon">👥</span>
-                    <span>Equipo</span>
+                    <span>${t('team')}</span>
                 </div>
                 <div class="nav-item" data-page="late-arrivals">
                     <span class="nav-icon">⏰</span>
-                    <span>Control Retrasos</span>
+                    <span>${t('late_arrivals')}</span>
                 </div>
                 <div class="nav-item" data-page="delegations">
                     <span class="nav-icon">🔁</span>
-                    <span>Delegaciones</span>
+                    <span>${t('delegations')}</span>
                 </div>
                 ` : ''}
                 ${isAdmin ? `
-                <div class="nav-section-title">Administración</div>
+                <div class="nav-section-title">${State.lang === 'en' ? 'Administration' : 'Administración'}</div>
                 <div class="nav-item" data-page="employees">
                     <span class="nav-icon">⚙️</span>
-                    <span>Empleados</span>
+                    <span>${t('employees')}</span>
                 </div>
                 <div class="nav-item" data-page="holidays">
                     <span class="nav-icon">🎉</span>
-                    <span>Festivos</span>
+                    <span>${t('holidays')}</span>
                 </div>
                 <div class="nav-item" data-page="departments">
                     <span class="nav-icon">🏢</span>
-                    <span>Departamentos</span>
+                    <span>${t('departments')}</span>
                 </div>
                 ` : ''}
+                <div class="nav-section-title">${State.lang === 'en' ? 'Account' : 'Cuenta'}</div>
+                <div class="nav-item" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span>${t('settings')}</span>
+                </div>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-card">
@@ -569,6 +632,9 @@ async function renderPage() {
                 break;
             case 'delegations':
                 await loadDelegations(main);
+                break;
+            case 'settings':
+                await loadSettings(main);
                 break;
             default:
                 await loadDashboard(main);
@@ -2546,34 +2612,186 @@ window.deleteHoliday = async function(id) {
 };
 
 // ─────────────────────────────────────────────
+// Settings Page
+// ─────────────────────────────────────────────
+
+async function loadSettings(container) {
+    const u = State.user;
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header">
+            <h1>⚙️ ${t('settings')}</h1>
+            <p>${t('manage_profile')}</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);">
+
+            <div class="panel">
+                <div class="panel-header"><h2>📷 ${t('profile_photo')}</h2></div>
+                <div class="panel-body">
+                    <div style="display:flex;align-items:center;gap:20px;">
+                        <div class="profile-avatar-wrap" onclick="document.getElementById('_settingsAvatarInput').click()" style="cursor:pointer;" title="${t('click_photo')}">
+                            <div class="employee-avatar-lg profile-avatar-lg" style="background:${u.avatar_image ? 'transparent' : u.avatar_color}">
+                                ${u.avatar_image ? `<img src="${u.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="">` : u.initials}
+                            </div>
+                            <div class="profile-avatar-overlay">📷</div>
+                        </div>
+                        <div>
+                            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;">${t('click_photo')}</p>
+                            <input type="file" id="_settingsAvatarInput" accept="image/*" style="display:none" onchange="settingsUploadAvatar(this)">
+                            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('_settingsAvatarInput').click()">📷 ${State.lang === 'en' ? 'Change photo' : 'Cambiar foto'}</button>
+                            ${u.avatar_image ? `<button class="btn btn-danger btn-sm" style="margin-left:8px;" onclick="settingsRemoveAvatar()">🗑️ ${State.lang === 'en' ? 'Remove' : 'Quitar'}</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header"><h2>🌐 ${t('language')}</h2></div>
+                <div class="panel-body">
+                    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">${State.lang === 'en' ? 'Choose the interface language.' : 'Elige el idioma de la interfaz.'}</p>
+                    <div style="display:flex;gap:12px;">
+                        <button class="btn ${State.lang === 'es' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;" onclick="setLanguage('es')">🇪🇸 Castellano</button>
+                        <button class="btn ${State.lang === 'en' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;" onclick="setLanguage('en')">🇬🇧 English</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="panel" style="margin-top:var(--space-lg);">
+            <div class="panel-header"><h2>👤 ${t('personal_info')}</h2></div>
+            <div class="panel-body">
+                <div class="login-error" id="settingsInfoError"></div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>${t('first_name')}</label>
+                        <input type="text" class="form-input" id="settingsFirstName" value="${esc(u.first_name)}">
+                    </div>
+                    <div class="form-group">
+                        <label>${t('last_name')}</label>
+                        <input type="text" class="form-input" id="settingsLastName" value="${esc(u.last_name)}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>${t('email')}</label>
+                    <input type="email" class="form-input" id="settingsEmail" value="${esc(u.email)}">
+                </div>
+                <button class="btn btn-primary" onclick="saveProfileSettings()">${t('save_changes')}</button>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top:var(--space-lg);">
+            <div class="panel-header"><h2>🔒 ${t('change_password')}</h2></div>
+            <div class="panel-body">
+                <div class="login-error" id="settingsPwError"></div>
+                <div class="form-group">
+                    <label>${t('current_password')}</label>
+                    <input type="password" class="form-input" id="settingsCurrent" placeholder="••••••••">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>${t('new_password')}</label>
+                        <input type="password" class="form-input" id="settingsNew" placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label>${t('confirm_password')}</label>
+                        <input type="password" class="form-input" id="settingsConfirm" placeholder="••••••••">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="savePasswordSettings()">${t('change_password')}</button>
+            </div>
+        </div>
+    </div>`;
+}
+
+window.settingsUploadAvatar = async function(input) {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+        const imgData = await resizeImage(file, 256);
+        await api(`/api/users/${State.user.id}/avatar`, { method: 'POST', body: JSON.stringify({ avatar_image: imgData }) });
+        const me = await api('/api/me');
+        if (me.authenticated) State.user = me.user;
+        showToast(State.lang === 'en' ? 'Photo updated' : 'Foto actualizada', 'success');
+        renderApp();
+        navigateTo('settings');
+    } catch(err) { showToast(err.message, 'error'); }
+};
+
+window.settingsRemoveAvatar = async function() {
+    try {
+        await api(`/api/users/${State.user.id}/avatar`, { method: 'POST', body: JSON.stringify({ avatar_image: null }) });
+        const me = await api('/api/me');
+        if (me.authenticated) State.user = me.user;
+        showToast(State.lang === 'en' ? 'Photo removed' : 'Foto eliminada', 'success');
+        renderApp();
+        navigateTo('settings');
+    } catch(err) { showToast(err.message, 'error'); }
+};
+
+window.saveProfileSettings = async function() {
+    const first_name = document.getElementById('settingsFirstName').value.trim();
+    const last_name = document.getElementById('settingsLastName').value.trim();
+    const email = document.getElementById('settingsEmail').value.trim();
+    const errorEl = document.getElementById('settingsInfoError');
+    if (!first_name || !last_name) {
+        errorEl.textContent = t('name_required'); errorEl.classList.add('visible'); return;
+    }
+    try {
+        const res = await api(`/api/users/${State.user.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ first_name, last_name, email })
+        });
+        State.user = res.user;
+        showToast(t('profile_updated'), 'success');
+        errorEl.classList.remove('visible');
+        renderApp();
+        navigateTo('settings');
+    } catch(err) { errorEl.textContent = err.message; errorEl.classList.add('visible'); }
+};
+
+window.savePasswordSettings = async function() {
+    const current = document.getElementById('settingsCurrent').value;
+    const newPw = document.getElementById('settingsNew').value;
+    const confirm = document.getElementById('settingsConfirm').value;
+    const errorEl = document.getElementById('settingsPwError');
+    if (newPw !== confirm) { errorEl.textContent = t('passwords_no_match'); errorEl.classList.add('visible'); return; }
+    if (newPw.length < 8) { errorEl.textContent = t('min_8'); errorEl.classList.add('visible'); return; }
+    try {
+        await api('/api/change-password', { method: 'POST', body: JSON.stringify({ current_password: current, new_password: newPw }) });
+        errorEl.classList.remove('visible');
+        showToast(t('password_updated'), 'success');
+        ['settingsCurrent','settingsNew','settingsConfirm'].forEach(id => document.getElementById(id).value = '');
+    } catch(err) { errorEl.textContent = err.message; errorEl.classList.add('visible'); }
+};
+
+window.setLanguage = function(lang) {
+    State.lang = lang;
+    localStorage.setItem('lang', lang);
+    showToast(t('lang_changed'), 'success');
+    renderApp();
+    navigateTo('settings');
+};
+
+// ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
 
 function translateStatus(status) {
-    const map = {
-        pending: 'Pendiente',
-        approved: 'Aprobada',
-        rejected: 'Rechazada',
-        cancel_requested: 'Cancelación Pendiente',
-        cancelled: 'Cancelada',
-    };
-    return map[status] || status;
+    const keys = { pending: 'pending', approved: 'approved', rejected: 'rejected', cancel_requested: 'cancel_requested', cancelled: 'cancelled' };
+    return keys[status] ? t(keys[status]) : status;
 }
 
 function translateType(type) {
-    const map = {
-        vacaciones: '🏖️ Vacaciones',
-        asuntos_propios: '📌 Asuntos Propios',
-        baja_medica: '🏥 Baja Médica',
-        permiso: '📋 Permiso',
-        otro: '📝 Otro'
-    };
-    return map[type] || type;
+    const es = { vacaciones: '🏖️ Vacaciones', asuntos_propios: '📌 Asuntos Propios', baja_medica: '🏥 Baja Médica', permiso: '📋 Permiso', otro: '📝 Otro' };
+    const en = { vacaciones: '🏖️ Vacations', asuntos_propios: '📌 Personal Day', baja_medica: '🏥 Sick Leave', permiso: '📋 Permission', otro: '📝 Other' };
+    return (State.lang === 'en' ? en : es)[type] || type;
 }
 
 function translateRole(role) {
-    const map = { admin: 'Administrador', manager: 'Manager', employee: 'Empleado' };
-    return map[role] || role;
+    const keys = { admin: 'admin', manager: 'manager', employee: 'employee' };
+    return keys[role] ? t(keys[role]) : role;
 }
 
 function formatDate(dateStr) {
