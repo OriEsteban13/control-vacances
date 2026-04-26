@@ -2303,16 +2303,11 @@ window.openNewUserModal = async function() {
                     </select>
                 </div>
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Contraseña</label>
-                    <input type="password" class="form-input" id="userPassword" placeholder="Contraseña" value="password123">
-                </div>
-                <div class="form-group">
-                    <label>Días Totales</label>
-                    <input type="number" class="form-input" id="userTotalDays" value="22" min="0" max="50">
-                </div>
+            <div class="form-group">
+                <label>Días Totales</label>
+                <input type="number" class="form-input" id="userTotalDays" value="22" min="0" max="50" style="max-width:160px;">
             </div>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">Se generará una contraseña temporal automáticamente. La verás al crear el empleado.</p>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
@@ -2329,7 +2324,6 @@ window.submitNewUser = async function() {
         email: document.getElementById('userEmail').value,
         department: document.getElementById('userDepartment').value,
         role: document.getElementById('userRole').value,
-        password: document.getElementById('userPassword').value,
         total_days: parseInt(document.getElementById('userTotalDays').value)
     };
 
@@ -2339,10 +2333,33 @@ window.submitNewUser = async function() {
     }
 
     try {
-        await api('/api/users', { method: 'POST', body: JSON.stringify(data) });
+        const res = await api('/api/users', { method: 'POST', body: JSON.stringify(data) });
         closeModal();
-        showToast('Empleado creado correctamente', 'success');
         renderPage();
+        // Show temp password — SMTP may not be configured so admin must relay it manually
+        openModal(`
+        <div class="modal">
+            <div class="modal-header">
+                <h3>✅ Empleado creado</h3>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom:12px;">El empleado <strong>${esc(data.first_name)} ${esc(data.last_name)}</strong> ha sido creado correctamente.</p>
+                ${res.temp_password ? `
+                <div style="background:rgba(108,92,231,0.12);border:1px solid rgba(108,92,231,0.3);border-radius:10px;padding:16px;margin-bottom:12px;">
+                    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:6px;">Contraseña temporal (cópiala y compártela con el empleado):</p>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <code style="font-size:1.1rem;font-weight:700;letter-spacing:2px;color:var(--accent);flex:1;">${esc(res.temp_password)}</code>
+                        <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${esc(res.temp_password)}');showToast('Copiado','success')">📋 Copiar</button>
+                    </div>
+                </div>
+                <p style="font-size:0.8rem;color:var(--text-muted);">⚠️ El empleado deberá cambiar esta contraseña en su primer inicio de sesión. Si el email SMTP está configurado, también recibirá las credenciales por correo.</p>
+                ` : ''}
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal()">Entendido</button>
+            </div>
+        </div>`);
     } catch (err) {
         showToast(err.message, 'error');
     }
