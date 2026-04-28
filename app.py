@@ -188,6 +188,15 @@ class User(UserMixin, db.Model):
     def days_remaining(self, year=None):
         return self.get_allocation(year) - self.days_used(year)
 
+    def sick_days_count(self, year=None):
+        if year is None:
+            year = date.today().year
+        leaves = SickLeave.query.filter(
+            SickLeave.user_id == self.id,
+            db.extract('year', SickLeave.start_date) == year,
+        ).all()
+        return sum(l.calendar_days for l in leaves)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -208,6 +217,7 @@ class User(UserMixin, db.Model):
             'avatar_image': self.avatar_image,
             'must_change_password': self.must_change_password,
             'hire_date': self.hire_date.isoformat() if self.hire_date else None,
+            'sick_days': self.sick_days_count(),
         }
 
 
@@ -384,6 +394,43 @@ class DepartmentRule(db.Model):
             'min_advance_days': self.min_advance_days,
             'max_consecutive_days': self.max_consecutive_days,
             'blackout_periods': json.loads(self.blackout_periods) if self.blackout_periods else [],
+        }
+
+
+class SickLeave(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=True)   # None = abierta (en curso)
+    leave_type = db.Column(db.String(50), nullable=False, default='IT')  # IT, AT, Maternidad, Paternidad, Otro
+    notes = db.Column(db.Text, default='')
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    employee = db.relationship('User', foreign_keys=[user_id], backref='sick_leaves')
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    @property
+    def calendar_days(self):
+        end = self.end_date or date.today()
+        return (end - self.start_date).days + 1
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'employee_name': self.employee.full_name if self.employee else 'Unknown',
+            'employee_initials': self.employee.initials if self.employee else '??',
+            'employee_avatar_color': self.employee.avatar_color if self.employee else '#666',
+            'employee_avatar_image': self.employee.avatar_image if self.employee else None,
+            'employee_department': self.employee.department if self.employee else '',
+            'start_date': self.start_date.isoformat(),
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'leave_type': self.leave_type,
+            'notes': self.notes,
+            'calendar_days': self.calendar_days,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
 
@@ -1495,6 +1542,114 @@ def get_late_ranking():
 
 
 # ─────────────────────────────────────────────
+# API Routes — Sick Leaves
+# ─────────────────────────────────────────────
+
+@app.route('/api/sick-leaves', methods=['GET'])
+@login_required
+def get_sick_leaves():
+    user_id = request.args.get('user_id', type=int)
+    year = request.args.get('year', type=int)
+
+    if current_user.role in ['admin', 'manager']:
+        query = SickLeave.query.join(User, User.id == SickLeave.user_id).filter(User.is_deleted == False)
+        if user_id:
+            query = query.filter(SickLeave.user_id == user_id)
+        if year:
+            query = query.filter(db.extract('year', SickLeave.start_date) == year)
+    else:
+        query = SickLeave.query.filter_by(user_id=current_user.id)
+        if year:
+            query = query.filter(db.extract('year', SickLeave.start_date) == year)
+
+    leaves = query.order_by(SickLeave.start_date.desc()).all()
+    return jsonify([l.to_dict() for l in leaves])
+
+
+@app.route('/api/sick-leaves', methods=['POST'])
+@login_required
+def create_sick_leave():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    try:
+        start = date_parser.parse(data['start_date']).date()
+    except (KeyError, ValueError):
+        return jsonify({'success': False, 'error': 'Fecha de inicio inválida'}), 400
+
+    end = None
+    if data.get('end_date'):
+        try:
+            end = date_parser.parse(data['end_date']).date()
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Fecha de fin inválida'}), 400
+        if end < start:
+            return jsonify({'success': False, 'error': 'La fecha de fin debe ser posterior a la de inicio'}), 400
+
+    user_id = data.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'user_id requerido'}), 400
+
+    leave = SickLeave(
+        user_id=user_id,
+        start_date=start,
+        end_date=end,
+        leave_type=data.get('leave_type', 'IT'),
+        notes=data.get('notes', ''),
+        created_by=current_user.id,
+    )
+    db.session.add(leave)
+    db.session.commit()
+    log_audit('create_sick_leave', 'sick_leave', leave.id, f"user_id={user_id}")
+    return jsonify({'success': True, 'sick_leave': leave.to_dict()})
+
+
+@app.route('/api/sick-leaves/<int:leave_id>', methods=['PUT'])
+@login_required
+def update_sick_leave(leave_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    leave = db.session.get(SickLeave, leave_id)
+    if not leave:
+        return jsonify({'success': False, 'error': 'Baja no encontrada'}), 404
+    data = request.get_json() or {}
+    if 'start_date' in data:
+        try:
+            leave.start_date = date_parser.parse(data['start_date']).date()
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Fecha de inicio inválida'}), 400
+    if 'end_date' in data:
+        if data['end_date']:
+            try:
+                leave.end_date = date_parser.parse(data['end_date']).date()
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'error': 'Fecha de fin inválida'}), 400
+        else:
+            leave.end_date = None
+    if 'leave_type' in data:
+        leave.leave_type = data['leave_type']
+    if 'notes' in data:
+        leave.notes = data['notes']
+    db.session.commit()
+    log_audit('update_sick_leave', 'sick_leave', leave_id)
+    return jsonify({'success': True, 'sick_leave': leave.to_dict()})
+
+
+@app.route('/api/sick-leaves/<int:leave_id>', methods=['DELETE'])
+@login_required
+def delete_sick_leave(leave_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    leave = db.session.get(SickLeave, leave_id)
+    if not leave:
+        return jsonify({'success': False, 'error': 'Baja no encontrada'}), 404
+    log_audit('delete_sick_leave', 'sick_leave', leave_id)
+    db.session.delete(leave)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ─────────────────────────────────────────────
 # API Routes — Company Settings & Avatars
 # ─────────────────────────────────────────────
 
@@ -1660,7 +1815,21 @@ def absences_today():
         VacationRequest.end_date >= today,
         User.is_deleted == False,
     ).all()
-    return jsonify([v.to_dict() for v in vacations])
+    result = [v.to_dict() for v in vacations]
+
+    sick = SickLeave.query.join(
+        User, User.id == SickLeave.user_id
+    ).filter(
+        SickLeave.start_date <= today,
+        db.or_(SickLeave.end_date == None, SickLeave.end_date >= today),
+        User.is_deleted == False,
+    ).all()
+    for s in sick:
+        d = s.to_dict()
+        d['absence_type'] = 'sick_leave'
+        result.append(d)
+
+    return jsonify(result)
 
 
 @app.route('/api/absences/upcoming', methods=['GET'])

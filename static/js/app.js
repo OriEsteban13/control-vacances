@@ -24,6 +24,7 @@ const State = {
     calendarUserId: null,
     filterStatus: 'all',
     selectedEmployeeId: null,
+    sickLeaves: [],
     lang: localStorage.getItem('lang') || 'es',
 };
 
@@ -540,6 +541,10 @@ function renderLayout() {
                     <span class="nav-icon">⚙️</span>
                     <span>${t('employees')}</span>
                 </div>
+                <div class="nav-item" data-page="sick-leaves">
+                    <span class="nav-icon">🏥</span>
+                    <span>${State.lang === 'en' ? 'Sick Leaves' : 'Bajas'}</span>
+                </div>
                 <div class="nav-item" data-page="holidays">
                     <span class="nav-icon">🎉</span>
                     <span>${t('holidays')}</span>
@@ -630,6 +635,9 @@ async function renderPage() {
             case 'late-arrivals':
                 await loadLateArrivals(main);
                 break;
+            case 'sick-leaves':
+                await loadSickLeaves(main);
+                break;
             case 'delegations':
                 await loadDelegations(main);
                 break;
@@ -670,6 +678,9 @@ async function loadDashboard(container) {
         api('/api/absences/today'),
         api('/api/absences/upcoming?days=7'),
     ]);
+    // Separate sick leaves from vacation absences for today
+    const sickToday = absToday.filter(a => a.absence_type === 'sick_leave');
+    const vacToday = absToday.filter(a => a.absence_type !== 'sick_leave');
     State.stats = stats;
     State.vacations = vacations;
 
@@ -710,6 +721,12 @@ async function loadDashboard(container) {
                 <div class="stat-value">${allocDays}</div>
                 <div class="stat-label">Total Asignado</div>
             </div>
+            ${u.sick_days > 0 ? `
+            <div class="stat-card danger">
+                <div class="stat-icon">🏥</div>
+                <div class="stat-value">${u.sick_days}</div>
+                <div class="stat-label">Días de Baja</div>
+            </div>` : ''}
         </div>
 
         ${isManager ? `
@@ -737,21 +754,40 @@ async function loadDashboard(container) {
         </div>
         ` : ''}
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg);">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-lg);">
             <div class="panel">
                 <div class="panel-header">
                     <h2>🏖️ Ausentes Hoy</h2>
-                    <span style="font-size:0.8rem;color:var(--text-muted);">${absToday.length} persona(s)</span>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">${vacToday.length} persona(s)</span>
                 </div>
                 <div class="panel-body">
-                    ${absToday.length === 0
+                    ${vacToday.length === 0
                         ? '<p style="color:var(--text-muted);font-size:0.85rem;">Nadie está de vacaciones hoy.</p>'
-                        : absToday.map(v => `
+                        : vacToday.map(v => `
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
                                 ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
                                 <div>
                                     <div style="font-weight:600;font-size:0.85rem;">${esc(v.employee_name)}</div>
                                     <div style="font-size:0.75rem;color:var(--text-muted);">hasta ${formatDate(v.end_date)}</div>
+                                </div>
+                            </div>`).join('')
+                    }
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>🏥 De Baja</h2>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">${sickToday.length} persona(s)</span>
+                </div>
+                <div class="panel-body">
+                    ${sickToday.length === 0
+                        ? '<p style="color:var(--text-muted);font-size:0.85rem;">Nadie está de baja actualmente.</p>'
+                        : sickToday.map(s => `
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                ${renderAvatarEl(s.employee_avatar_color, s.employee_initials, s.employee_avatar_image, 32)}
+                                <div>
+                                    <div style="font-weight:600;font-size:0.85rem;">${esc(s.employee_name)}</div>
+                                    <div style="font-size:0.75rem;color:var(--color-danger);">🏥 ${esc(s.leave_type)} · desde ${formatDate(s.start_date)}</div>
                                 </div>
                             </div>`).join('')
                     }
@@ -2802,6 +2838,245 @@ function getMonthName(month) {
                     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     return months[month];
 }
+
+// ─────────────────────────────────────────────
+// Sick Leaves Page
+// ─────────────────────────────────────────────
+
+const SICK_LEAVE_TYPES = {
+    'IT': '🤒 IT — Incapacidad Temporal',
+    'AT': '⚠️ AT — Accidente de Trabajo',
+    'Maternidad': '🤱 Maternidad',
+    'Paternidad': '👶 Paternidad',
+    'Otro': '📋 Otro',
+};
+
+function sickLeaveTypeLabel(type) {
+    return SICK_LEAVE_TYPES[type] || type;
+}
+
+async function loadSickLeaves(container) {
+    const isAdmin = State.user.role === 'admin';
+    const isManager = State.user.role === 'admin' || State.user.role === 'manager';
+
+    let leaves = [];
+    let users = [];
+
+    if (isManager) {
+        [leaves, users] = await Promise.all([
+            api('/api/sick-leaves'),
+            api('/api/users'),
+        ]);
+    } else {
+        leaves = await api(`/api/sick-leaves?user_id=${State.user.id}`);
+    }
+
+    State.sickLeaves = leaves;
+
+    // Count currently active (open) sick leaves
+    const today = new Date().toISOString().split('T')[0];
+    const activeLeaves = leaves.filter(l => l.start_date <= today && (!l.end_date || l.end_date >= today));
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header">
+            <div>
+                <h1>🏥 Gestión de Bajas</h1>
+                <p>Control de bajas médicas y ausencias por enfermedad</p>
+            </div>
+        </div>
+
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="stat-card danger">
+                <div class="stat-icon">🏥</div>
+                <div class="stat-value">${activeLeaves.length}</div>
+                <div class="stat-label">Bajas Activas Ahora</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-icon">📋</div>
+                <div class="stat-value">${leaves.length}</div>
+                <div class="stat-label">Total Registradas</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon">📅</div>
+                <div class="stat-value">${leaves.reduce((s, l) => s + l.calendar_days, 0)}</div>
+                <div class="stat-label">Días Totales de Baja</div>
+            </div>
+        </div>
+
+        ${isAdmin ? `
+        <div class="panel" style="margin-bottom: var(--space-lg);">
+            <div class="panel-header">
+                <h2>➕ Registrar Nueva Baja</h2>
+            </div>
+            <div class="panel-body">
+                <div class="form-row" style="align-items: flex-end; flex-wrap: wrap;">
+                    <div class="form-group">
+                        <label>Empleado</label>
+                        <select class="form-select" id="slUserId">
+                            ${users.map(u => `<option value="${u.id}">${esc(u.full_name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo de baja</label>
+                        <select class="form-select" id="slType">
+                            ${Object.entries(SICK_LEAVE_TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha inicio</label>
+                        <input type="date" class="form-input" id="slStart" value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha fin <span style="color:var(--text-muted);font-size:0.8rem;">(opcional)</span></label>
+                        <input type="date" class="form-input" id="slEnd">
+                    </div>
+                    <div class="form-group" style="flex:2;">
+                        <label>Notas</label>
+                        <input type="text" class="form-input" id="slNotes" placeholder="Observaciones internas...">
+                    </div>
+                    <button class="btn btn-primary" onclick="submitSickLeave()" style="height:42px;margin-bottom:4px;">Registrar Baja</button>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+
+        <div class="panel">
+            <div class="panel-header">
+                <h2>📋 Historial de Bajas</h2>
+            </div>
+            <div class="panel-body no-padding">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            ${isManager ? '<th>Empleado</th>' : ''}
+                            <th>Tipo</th>
+                            <th>Fecha Inicio</th>
+                            <th>Fecha Fin</th>
+                            <th>Días</th>
+                            <th>Estado</th>
+                            <th>Notas</th>
+                            ${isAdmin ? '<th>Acciones</th>' : ''}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${leaves.length === 0
+                            ? `<tr><td colspan="${isAdmin ? 8 : isManager ? 7 : 6}" style="text-align:center;color:var(--text-muted);padding:24px;">No hay bajas registradas.</td></tr>`
+                            : leaves.map(l => {
+                                const isActive = l.start_date <= today && (!l.end_date || l.end_date >= today);
+                                return `<tr>
+                                    ${isManager ? `<td>
+                                        <div style="display:flex;align-items:center;gap:8px;">
+                                            ${renderAvatarEl(l.employee_avatar_color, l.employee_initials, l.employee_avatar_image, 28)}
+                                            <span>${esc(l.employee_name)}</span>
+                                        </div>
+                                    </td>` : ''}
+                                    <td>${sickLeaveTypeLabel(l.leave_type)}</td>
+                                    <td>${formatDate(l.start_date)}</td>
+                                    <td>${l.end_date ? formatDate(l.end_date) : '<span style="color:var(--color-danger);">En curso</span>'}</td>
+                                    <td>${l.calendar_days}</td>
+                                    <td>
+                                        ${isActive
+                                            ? '<span class="status-badge status-pending" style="background:var(--color-danger-bg);color:var(--color-danger);border-color:var(--color-danger-border);">🔴 Activa</span>'
+                                            : '<span class="status-badge status-approved">✅ Finalizada</span>'}
+                                    </td>
+                                    <td style="color:var(--text-muted);font-size:0.82rem;">${esc(l.notes || '—')}</td>
+                                    ${isAdmin ? `<td>
+                                        <button class="btn btn-secondary btn-sm" onclick="editSickLeave(${l.id})">✏️</button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteSickLeave(${l.id})" style="margin-left:4px;">🗑️</button>
+                                    </td>` : ''}
+                                </tr>`;
+                            }).join('')
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+}
+
+window.submitSickLeave = async function() {
+    const user_id = parseInt(document.getElementById('slUserId').value);
+    const leave_type = document.getElementById('slType').value;
+    const start_date = document.getElementById('slStart').value;
+    const end_date = document.getElementById('slEnd').value || null;
+    const notes = document.getElementById('slNotes').value;
+
+    if (!start_date) { showToast('Indica la fecha de inicio', 'error'); return; }
+    try {
+        await api('/api/sick-leaves', {
+            method: 'POST',
+            body: JSON.stringify({ user_id, leave_type, start_date, end_date, notes }),
+        });
+        showToast('Baja registrada correctamente', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.editSickLeave = async function(id) {
+    const leave = State.sickLeaves.find(l => l.id === id);
+    if (!leave) return;
+    openModal(`
+    <div class="modal">
+        <div class="modal-header">
+            <h3>✏️ Editar Baja — ${esc(leave.employee_name)}</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Tipo de baja</label>
+                    <select class="form-select" id="editSlType">
+                        ${Object.entries(SICK_LEAVE_TYPES).map(([k, v]) => `<option value="${k}" ${k === leave.leave_type ? 'selected' : ''}>${v}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Fecha inicio</label>
+                    <input type="date" class="form-input" id="editSlStart" value="${leave.start_date}">
+                </div>
+                <div class="form-group">
+                    <label>Fecha fin <span style="color:var(--text-muted);font-size:0.8rem;">(vacío = en curso)</span></label>
+                    <input type="date" class="form-input" id="editSlEnd" value="${leave.end_date || ''}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Notas</label>
+                <input type="text" class="form-input" id="editSlNotes" value="${esc(leave.notes || '')}">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitEditSickLeave(${id})">Guardar Cambios</button>
+        </div>
+    </div>`);
+};
+
+window.submitEditSickLeave = async function(id) {
+    const leave_type = document.getElementById('editSlType').value;
+    const start_date = document.getElementById('editSlStart').value;
+    const end_date = document.getElementById('editSlEnd').value || null;
+    const notes = document.getElementById('editSlNotes').value;
+    try {
+        await api(`/api/sick-leaves/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ leave_type, start_date, end_date, notes }),
+        });
+        closeModal();
+        showToast('Baja actualizada', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.deleteSickLeave = async function(id) {
+    if (!confirm('¿Eliminar este registro de baja?')) return;
+    try {
+        await api(`/api/sick-leaves/${id}`, { method: 'DELETE' });
+        showToast('Baja eliminada', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
 
 // ─────────────────────────────────────────────
 // Init
