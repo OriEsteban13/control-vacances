@@ -755,7 +755,7 @@ textarea.form-input {
     position: relative;
     z-index: 1;
     margin-bottom: var(--space-lg);
-    overflow: hidden;
+    overflow: clip; /* clip keeps rounded corners without blocking child scroll containers */
 }
 
 .panel-header {

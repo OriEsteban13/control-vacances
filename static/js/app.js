@@ -87,6 +87,29 @@ const _tr = {
         name_required: 'Name is required', save_changes: 'Save Changes',
         lang_changed: 'Language changed to English',
     },
+    ca: {
+        dashboard: 'Tauler', calendar: 'Calendari', my_vacations: 'Les meves vacances',
+        requests: 'Sol·licituds', team: 'Equip', late_arrivals: 'Control Retards',
+        delegations: 'Delegacions', employees: 'Empleats', holidays: 'Festius',
+        departments: 'Departaments', settings: 'Configuració',
+        pending: 'Pendent', approved: 'Aprovada', rejected: 'Rebutjada',
+        cancel_requested: "Cancel·lació pendent", cancelled: 'Cancel·lada',
+        admin: 'Administrador', manager: 'Manager', employee: 'Empleat',
+        available_days: 'Dies Disponibles', used_days: 'Dies Usats',
+        pending_days: 'Dies Pendents', total_assigned: 'Total Assignat',
+        new_request: '+ Nova Sol·licitud', save: 'Desar', cancel: 'Cancel·lar',
+        profile_photo: 'Foto de Perfil', personal_info: 'Informació Personal',
+        change_password: 'Canviar Contrasenya', language: 'Idioma',
+        first_name: 'Nom', last_name: 'Cognoms', email: 'Correu electrònic',
+        current_password: 'Contrasenya actual', new_password: 'Nova contrasenya (mín. 8 car.)',
+        confirm_password: 'Confirmar contrasenya',
+        hello: 'Hola', manage_profile: 'Gestiona el teu perfil i preferències',
+        click_photo: 'Fes clic a la foto per canviar-la',
+        passwords_no_match: 'Les contrasenyes no coincideixen', min_8: 'Mínim 8 caràcters',
+        profile_updated: 'Perfil actualitzat', password_updated: 'Contrasenya actualitzada',
+        name_required: 'El nom és obligatori', save_changes: 'Desar Canvis',
+        lang_changed: "Idioma canviat a Català",
+    },
 };
 
 function t(key) {
@@ -1673,19 +1696,21 @@ async function loadEmployees(container) {
                     <tbody>
                         ${users.map(u => `
                         <tr>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: var(--space-sm);">
+                            <td style="white-space:nowrap;">
+                                <div style="display:flex;align-items:center;gap:var(--space-sm);">
                                     ${renderAvatarEl(u.avatar_color, u.initials, u.avatar_image, 32)}
-                                    <span style="font-weight: 600;">${esc(u.full_name)}</span>
+                                    <span style="font-weight:600;">${esc(u.full_name)}</span>
                                 </div>
                             </td>
-                            <td style="color: var(--text-muted);">${esc(u.email)}</td>
+                            <td style="max-width:200px;">
+                                <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);" title="${esc(u.email)}">${esc(u.email)}</span>
+                            </td>
                             <td>${esc(u.department)}</td>
                             <td><span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></td>
-                            <td style="font-weight: 700;">${u.total_days}</td>
-                            <td style="color: var(--color-info); font-weight: 600;">${u.days_used}</td>
-                            <td style="color: var(--color-success); font-weight: 600;">${u.days_remaining}</td>
-                            <td>
+                            <td style="font-weight:700;text-align:center;">${u.total_days}</td>
+                            <td style="color:var(--color-info);font-weight:600;text-align:center;">${u.days_used}</td>
+                            <td style="color:var(--color-success);font-weight:600;text-align:center;">${u.days_remaining}</td>
+                            <td style="white-space:nowrap;">
                                 <div class="action-btns">
                                     <button class="btn btn-secondary btn-sm" onclick="openEditUserModal(${u.id})">✏️</button>
                                     ${u.id !== State.user.id ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">🗑️</button>` : ''}
@@ -2715,10 +2740,11 @@ async function loadSettings(container) {
             <div class="panel">
                 <div class="panel-header"><h2>🌐 ${t('language')}</h2></div>
                 <div class="panel-body">
-                    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">${State.lang === 'en' ? 'Choose the interface language.' : 'Elige el idioma de la interfaz.'}</p>
-                    <div style="display:flex;gap:12px;">
-                        <button class="btn ${State.lang === 'es' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;" onclick="setLanguage('es')">🇪🇸 Castellano</button>
-                        <button class="btn ${State.lang === 'en' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;" onclick="setLanguage('en')">🇬🇧 English</button>
+                    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">${State.lang === 'en' ? 'Choose the interface language.' : State.lang === 'ca' ? "Tria l'idioma de la interfície." : 'Elige el idioma de la interfaz.'}</p>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                        <button class="btn ${State.lang === 'es' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;min-width:120px;" onclick="setLanguage('es')">🇪🇸 Castellano</button>
+                        <button class="btn ${State.lang === 'ca' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;min-width:120px;" onclick="setLanguage('ca')">🏴 Català</button>
+                        <button class="btn ${State.lang === 'en' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;min-width:120px;" onclick="setLanguage('en')">🇬🇧 English</button>
                     </div>
                 </div>
             </div>
@@ -2852,7 +2878,8 @@ function translateStatus(status) {
 function translateType(type) {
     const es = { vacaciones: '🏖️ Vacaciones', asuntos_propios: '📌 Asuntos Propios', baja_medica: '🏥 Baja Médica', permiso: '📋 Permiso', otro: '📝 Otro' };
     const en = { vacaciones: '🏖️ Vacations', asuntos_propios: '📌 Personal Day', baja_medica: '🏥 Sick Leave', permiso: '📋 Permission', otro: '📝 Other' };
-    return (State.lang === 'en' ? en : es)[type] || type;
+    const ca = { vacaciones: '🏖️ Vacances', asuntos_propios: '📌 Assumptes propis', baja_medica: '🏥 Baixa mèdica', permiso: '📋 Permís', otro: '📝 Altre' };
+    return (State.lang === 'en' ? en : State.lang === 'ca' ? ca : es)[type] || type;
 }
 
 function translateRole(role) {
@@ -2862,12 +2889,18 @@ function translateRole(role) {
 
 function formatDate(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    const locale = State.lang === 'en' ? 'en-GB' : State.lang === 'ca' ? 'ca-ES' : 'es-ES';
+    return d.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function getMonthName(month) {
-    const months = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const es = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const ca = ['', 'Gener', 'Febrer', 'Març', 'Abril', 'Maig', 'Juny',
+                'Juliol', 'Agost', 'Setembre', 'Octubre', 'Novembre', 'Desembre'];
+    const en = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'];
+    const months = State.lang === 'ca' ? ca : State.lang === 'en' ? en : es;
     return months[month];
 }
 
