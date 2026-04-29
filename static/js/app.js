@@ -25,6 +25,9 @@ const State = {
     filterStatus: 'all',
     selectedEmployeeId: null,
     sickLeaves: [],
+    clients: [],
+    events: [],
+    eventsYear: new Date().getFullYear(),
     lang: localStorage.getItem('lang') || 'es',
 };
 
@@ -502,7 +505,7 @@ function renderLayout() {
                 </div>
             </div>
             <nav class="sidebar-nav">
-                <div class="nav-section-title">${State.lang === 'en' ? 'Main' : 'Principal'}</div>
+                <div class="nav-section-title">${State.lang === 'en' ? 'Vacations' : 'Vacaciones'}</div>
                 <div class="nav-item active" data-page="dashboard">
                     <span class="nav-icon">📊</span>
                     <span>${t('dashboard')}</span>
@@ -515,6 +518,21 @@ function renderLayout() {
                     <span class="nav-icon">🏖️</span>
                     <span>${t('my_vacations')}</span>
                 </div>
+
+                <div class="nav-section-title">Eventos</div>
+                <div class="nav-item" data-page="events">
+                    <span class="nav-icon">🎯</span>
+                    <span>Dashboard Eventos</span>
+                </div>
+                <div class="nav-item" data-page="events-calendar">
+                    <span class="nav-icon">📆</span>
+                    <span>Calendario Eventos</span>
+                </div>
+                <div class="nav-item" data-page="clients-config">
+                    <span class="nav-icon">🏢</span>
+                    <span>Clientes</span>
+                </div>
+
                 ${isManager ? `
                 <div class="nav-section-title">${State.lang === 'en' ? 'Management' : 'Gestión'}</div>
                 <div class="nav-item" data-page="requests">
@@ -637,6 +655,15 @@ async function renderPage() {
                 break;
             case 'sick-leaves':
                 await loadSickLeaves(main);
+                break;
+            case 'events':
+                await loadEvents(main);
+                break;
+            case 'events-calendar':
+                await loadEventsCalendar(main);
+                break;
+            case 'clients-config':
+                await loadClientsConfig(main);
                 break;
             case 'delegations':
                 await loadDelegations(main);
@@ -2838,6 +2865,635 @@ function getMonthName(month) {
                     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     return months[month];
 }
+
+// ─────────────────────────────────────────────
+// Events — helpers
+// ─────────────────────────────────────────────
+
+const EVENT_TYPOLOGIES = ['Deportivo', 'Musical', 'Cultural', 'Corporativo', 'Tecnología', 'Moda', 'Gastronomía', 'Otro'];
+
+const TYPOLOGY_COLORS = {
+    'Deportivo': '#0984e3', 'Musical': '#6C5CE7', 'Cultural': '#00b894',
+    'Corporativo': '#636e72', 'Tecnología': '#00cec9', 'Moda': '#e84393',
+    'Gastronomía': '#e17055', 'Otro': '#b2bec3',
+};
+
+function typologyBadge(typ) {
+    const col = TYPOLOGY_COLORS[typ] || '#b2bec3';
+    return `<span style="background:${col}22;color:${col};border:1px solid ${col}44;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">${typ || 'Otro'}</span>`;
+}
+
+function eventStatusBadge(ev) {
+    const today = new Date().toISOString().split('T')[0];
+    if (ev.end_date < today) return `<span style="background:var(--color-success-bg);color:var(--color-success);border:1px solid var(--color-success-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">✅ Finalizado</span>`;
+    if (ev.start_date <= today) return `<span style="background:var(--color-warning-bg);color:var(--color-warning);border:1px solid var(--color-warning-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">🔴 En curso</span>`;
+    return `<span style="background:var(--color-info-bg);color:var(--color-info);border:1px solid var(--color-info-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">📅 Próximo</span>`;
+}
+
+// ─────────────────────────────────────────────
+// Events Dashboard Page
+// ─────────────────────────────────────────────
+
+async function loadEvents(container) {
+    const isAdmin = State.user.role === 'admin';
+    const year = State.eventsYear;
+
+    const [stats, events, clients, users] = await Promise.all([
+        api(`/api/events/stats?year=${year}`),
+        api(`/api/events?year=${year}`),
+        api('/api/clients'),
+        isAdmin ? api('/api/users') : Promise.resolve([]),
+    ]);
+    State.events = events;
+    State.clients = clients;
+
+    const upcoming = events.filter(e => e.end_date >= new Date().toISOString().split('T')[0])
+                           .sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const past = events.filter(e => e.end_date < new Date().toISOString().split('T')[0]);
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <h1>🎯 Dashboard Eventos</h1>
+                <p>Visión global de todos los eventos y asignaciones de equipo</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <select class="form-select" id="eventsYearSel" style="width:110px;" onchange="changeEventsYear(this.value)">
+                    ${[year-1, year, year+1].map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
+                </select>
+                ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+            <div class="stat-card accent">
+                <div class="stat-icon">📅</div>
+                <div class="stat-value">${stats.upcoming}</div>
+                <div class="stat-label">Próximos Eventos</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon">🗂️</div>
+                <div class="stat-value">${stats.total}</div>
+                <div class="stat-label">Total ${year}</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-icon">🏢</div>
+                <div class="stat-value">${stats.clients_active}</div>
+                <div class="stat-label">Clientes Activos</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-icon">👤</div>
+                <div class="stat-value">${stats.total_assignment_days}</div>
+                <div class="stat-label">Días-Persona Asignados</div>
+            </div>
+        </div>
+
+        <!-- Próximos eventos -->
+        <div class="panel" style="margin-bottom:var(--space-lg);">
+            <div class="panel-header">
+                <h2>📅 Próximos Eventos</h2>
+                <span style="font-size:0.8rem;color:var(--text-muted);">${upcoming.length} evento(s)</span>
+            </div>
+            <div class="panel-body no-padding">
+                ${upcoming.length === 0
+                    ? '<div class="empty-state" style="padding:32px;"><p>No hay próximos eventos para ' + year + '.</p></div>'
+                    : `<table class="data-table">
+                        <thead><tr>
+                            <th>Evento</th>
+                            <th>Cliente</th>
+                            <th>Tipología</th>
+                            <th>Fechas</th>
+                            <th>Días</th>
+                            <th>Equipo asignado</th>
+                            <th>Estado</th>
+                            ${isAdmin ? '<th>Acciones</th>' : ''}
+                        </tr></thead>
+                        <tbody>
+                        ${upcoming.map(e => renderEventRow(e, isAdmin)).join('')}
+                        </tbody>
+                    </table>`
+                }
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);margin-bottom:var(--space-lg);">
+            <!-- Por cliente -->
+            <div class="panel">
+                <div class="panel-header"><h2>🏢 Eventos por Cliente</h2></div>
+                <div class="panel-body">
+                    ${Object.keys(stats.by_client).length === 0
+                        ? '<p style="color:var(--text-muted);">Sin datos.</p>'
+                        : Object.entries(stats.by_client)
+                            .sort((a,b) => b[1].count - a[1].count)
+                            .map(([name, d]) => `
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+                                <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0;"></div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);">${typologyBadge(d.typology)}</div>
+                                </div>
+                                <div style="text-align:right;white-space:nowrap;">
+                                    <div style="font-weight:700;font-size:1rem;">${d.count}</div>
+                                    <div style="font-size:0.72rem;color:var(--color-info);">${d.upcoming} próx.</div>
+                                </div>
+                            </div>`).join('')
+                    }
+                </div>
+            </div>
+
+            <!-- Por empleado -->
+            <div class="panel">
+                <div class="panel-header"><h2>👤 Eventos por Empleado</h2></div>
+                <div class="panel-body">
+                    ${Object.keys(stats.by_employee).length === 0
+                        ? '<p style="color:var(--text-muted);">Sin asignaciones.</p>'
+                        : Object.entries(stats.by_employee)
+                            .sort((a,b) => b[1].upcoming - a[1].upcoming || b[1].count - a[1].count)
+                            .map(([name, d]) => `
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                                ${renderAvatarEl(d.color, d.initials, d.avatar, 32)}
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:600;font-size:0.85rem;">${esc(name)}</div>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);">${d.upcoming} próximos · ${d.count} total ${year}</div>
+                                </div>
+                                <div style="font-weight:700;font-size:1rem;color:var(--accent-secondary);">${d.upcoming}</div>
+                            </div>`).join('')
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Histórico -->
+        ${past.length > 0 ? `
+        <div class="panel">
+            <div class="panel-header">
+                <h2>🗂️ Historial ${year}</h2>
+                <span style="font-size:0.8rem;color:var(--text-muted);">${past.length} evento(s) finalizados</span>
+            </div>
+            <div class="panel-body no-padding">
+                <table class="data-table">
+                    <thead><tr>
+                        <th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Equipo</th><th>Estado</th>
+                        ${isAdmin ? '<th>Acciones</th>' : ''}
+                    </tr></thead>
+                    <tbody>
+                    ${past.slice().reverse().map(e => renderEventRow(e, isAdmin)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>` : ''}
+
+    </div>`;
+
+    // Store users for modal use
+    window._eventUsers = users;
+    window._eventClients = clients;
+}
+
+function renderEventRow(e, isAdmin) {
+    const team = e.assignments.map(a =>
+        `<span title="${esc(a.employee_name)}" style="display:inline-block;margin-right:2px;">${renderAvatarEl(a.employee_avatar_color, a.employee_initials, a.employee_avatar_image, 24)}</span>`
+    ).join('');
+    const clientDot = e.client_color
+        ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${e.client_color};margin-right:5px;"></span>`
+        : '';
+    return `<tr>
+        <td><strong>${esc(e.name)}</strong>${e.location ? `<div style="font-size:0.75rem;color:var(--text-muted);">📍 ${esc(e.location)}</div>` : ''}</td>
+        <td>${clientDot}${esc(e.client_name || '—')}</td>
+        <td>${e.client_typology ? typologyBadge(e.client_typology) : '—'}</td>
+        <td style="white-space:nowrap;">${formatDate(e.start_date)}${e.start_date !== e.end_date ? `<br><span style="color:var(--text-muted);font-size:0.75rem;">→ ${formatDate(e.end_date)}</span>` : ''}</td>
+        <td style="text-align:center;">${e.duration_days}</td>
+        <td>${team || '<span style="color:var(--text-muted);font-size:0.8rem;">Sin asignar</span>'}</td>
+        <td>${eventStatusBadge(e)}</td>
+        ${isAdmin ? `<td>
+            <button class="btn btn-secondary btn-sm" onclick="openEditEventModal(${e.id})" title="Editar">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEvent(${e.id})" title="Eliminar" style="margin-left:4px;">🗑️</button>
+        </td>` : ''}
+    </tr>`;
+}
+
+window.changeEventsYear = function(y) {
+    State.eventsYear = parseInt(y);
+    renderPage();
+};
+
+function eventFormHTML(clients, users, ev) {
+    const userChecks = users.map(u => {
+        const checked = ev && ev.assignments.some(a => a.user_id === u.id) ? 'checked' : '';
+        return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;">
+            <input type="checkbox" class="evt-user-check" value="${u.id}" ${checked}>
+            ${renderAvatarEl(u.avatar_color, u.initials, u.avatar_image, 24)}
+            <span style="font-size:0.85rem;">${esc(u.full_name)}</span>
+        </label>`;
+    }).join('');
+
+    return `
+        <div class="form-row">
+            <div class="form-group" style="flex:2;">
+                <label>Nombre del evento *</label>
+                <input type="text" class="form-input" id="evtName" value="${ev ? esc(ev.name) : ''}" placeholder="Ej: BigSound Barakaldo 2026">
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label>Cliente</label>
+                <select class="form-select" id="evtClient">
+                    <option value="">— Sin cliente —</option>
+                    ${clients.map(c => `<option value="${c.id}" ${ev && ev.client_id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Fecha inicio *</label>
+                <input type="date" class="form-input" id="evtStart" value="${ev ? ev.start_date : ''}">
+            </div>
+            <div class="form-group">
+                <label>Fecha fin *</label>
+                <input type="date" class="form-input" id="evtEnd" value="${ev ? ev.end_date : ''}">
+            </div>
+            <div class="form-group" style="flex:2;">
+                <label>Ubicación</label>
+                <input type="text" class="form-input" id="evtLocation" value="${ev ? esc(ev.location) : ''}" placeholder="Ciudad, recinto...">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Notas</label>
+            <textarea class="form-input" id="evtNotes" rows="2" placeholder="Información adicional...">${ev ? esc(ev.notes) : ''}</textarea>
+        </div>
+        <div class="form-group">
+            <label>Equipo asignado</label>
+            <div style="max-height:180px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:8px 12px;">
+                ${userChecks}
+            </div>
+        </div>`;
+}
+
+window.openCreateEventModal = function() {
+    const clients = window._eventClients || [];
+    const users = window._eventUsers || [];
+    openModal(`
+    <div class="modal" style="max-width:640px;">
+        <div class="modal-header">
+            <h3>🎯 Nuevo Evento</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">${eventFormHTML(clients, users, null)}</div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitCreateEvent()">Crear Evento</button>
+        </div>
+    </div>`);
+};
+
+window.submitCreateEvent = async function() {
+    const name = document.getElementById('evtName').value.trim();
+    const client_id = parseInt(document.getElementById('evtClient').value) || null;
+    const start_date = document.getElementById('evtStart').value;
+    const end_date = document.getElementById('evtEnd').value;
+    const location = document.getElementById('evtLocation').value;
+    const notes = document.getElementById('evtNotes').value;
+    const user_ids = [...document.querySelectorAll('.evt-user-check:checked')].map(c => parseInt(c.value));
+
+    if (!name) { showToast('El nombre es obligatorio', 'error'); return; }
+    if (!start_date || !end_date) { showToast('Las fechas son obligatorias', 'error'); return; }
+    try {
+        await api('/api/events', { method: 'POST', body: JSON.stringify({ name, client_id, start_date, end_date, location, notes, user_ids }) });
+        closeModal();
+        showToast('Evento creado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.openEditEventModal = function(id) {
+    const ev = State.events.find(e => e.id === id);
+    if (!ev) return;
+    const clients = window._eventClients || [];
+    const users = window._eventUsers || [];
+    openModal(`
+    <div class="modal" style="max-width:640px;">
+        <div class="modal-header">
+            <h3>✏️ Editar Evento — ${esc(ev.name)}</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">${eventFormHTML(clients, users, ev)}</div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitEditEvent(${id})">Guardar Cambios</button>
+        </div>
+    </div>`);
+};
+
+window.submitEditEvent = async function(id) {
+    const name = document.getElementById('evtName').value.trim();
+    const client_id = parseInt(document.getElementById('evtClient').value) || null;
+    const start_date = document.getElementById('evtStart').value;
+    const end_date = document.getElementById('evtEnd').value;
+    const location = document.getElementById('evtLocation').value;
+    const notes = document.getElementById('evtNotes').value;
+    const user_ids = [...document.querySelectorAll('.evt-user-check:checked')].map(c => parseInt(c.value));
+
+    if (!name || !start_date || !end_date) { showToast('Rellena los campos obligatorios', 'error'); return; }
+    try {
+        await api(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify({ name, client_id, start_date, end_date, location, notes, user_ids }) });
+        closeModal();
+        showToast('Evento actualizado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.deleteEvent = async function(id) {
+    if (!confirm('¿Eliminar este evento?')) return;
+    try {
+        await api(`/api/events/${id}`, { method: 'DELETE' });
+        showToast('Evento eliminado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+// ─────────────────────────────────────────────
+// Events Calendar Page
+// ─────────────────────────────────────────────
+
+async function loadEventsCalendar(container) {
+    const isAdmin = State.user.role === 'admin';
+    const year = State.eventsYear;
+    const month = State.calendarMonth;
+
+    const [events, clients, users] = await Promise.all([
+        api(`/api/events?year=${year}`),
+        api('/api/clients'),
+        isAdmin ? api('/api/users') : Promise.resolve([]),
+    ]);
+    State.events = events;
+    State.clients = clients;
+    window._eventClients = clients;
+    window._eventUsers = users;
+
+    const today = new Date();
+    const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    // Build calendar grid for current month
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+    const startWeekday = (firstDay.getDay() + 6) % 7; // Monday=0
+
+    // Get events overlapping this month
+    const monthStart = `${year}-${String(month).padStart(2,'0')}-01`;
+    const monthEnd = `${year}-${String(month).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+    const monthEvents = events.filter(e => e.start_date <= monthEnd && e.end_date >= monthStart);
+
+    // Build day cells
+    let cells = '';
+    let dayNum = 1;
+    const totalDays = lastDay.getDate();
+    const totalCells = Math.ceil((startWeekday + totalDays) / 7) * 7;
+
+    for (let i = 0; i < totalCells; i++) {
+        const col = i % 7;
+        if (col === 0) cells += '<tr>';
+        if (i < startWeekday || dayNum > totalDays) {
+            cells += '<td class="cal-cell empty"></td>';
+        } else {
+            const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+            const isToday = dateStr === today.toISOString().split('T')[0];
+            const dayEvents = monthEvents.filter(e => e.start_date <= dateStr && e.end_date >= dateStr);
+            cells += `<td class="cal-cell${isToday ? ' today' : ''}">
+                <div class="cal-day-num">${dayNum}</div>
+                ${dayEvents.map(e => `
+                    <div class="cal-event-chip" style="background:${e.client_color || '#6C5CE7'}22;border-left:3px solid ${e.client_color || '#6C5CE7'};color:var(--text-primary);" title="${esc(e.name)}${e.location ? ' — ' + e.location : ''}">
+                        <span style="font-size:0.7rem;font-weight:600;">${esc(e.name)}</span>
+                    </div>`).join('')}
+            </td>`;
+            dayNum++;
+        }
+        if (col === 6) cells += '</tr>';
+    }
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <h1>📆 Calendario de Eventos</h1>
+                <p>Vista mensual de todos los eventos</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header" style="justify-content:space-between;">
+                <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(-1)">← Anterior</button>
+                <h2 style="margin:0;">${months[month-1]} ${year}</h2>
+                <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(1)">Siguiente →</button>
+            </div>
+            <div class="panel-body no-padding" style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                        <tr>${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d =>
+                            `<th style="padding:10px 8px;font-size:0.78rem;color:var(--text-muted);font-weight:600;text-align:center;border-bottom:1px solid var(--border-color);">${d}</th>`
+                        ).join('')}</tr>
+                    </thead>
+                    <tbody>${cells}</tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        ${clients.length > 0 ? `
+        <div class="panel">
+            <div class="panel-header"><h2>Leyenda Clientes</h2></div>
+            <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:12px;">
+                ${clients.map(c => `
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <div style="width:12px;height:12px;border-radius:3px;background:${c.color};"></div>
+                        <span style="font-size:0.82rem;">${esc(c.name)}</span>
+                        ${typologyBadge(c.typology)}
+                    </div>`).join('')}
+            </div>
+        </div>` : ''}
+    </div>`;
+
+    // Store for modal
+    window._eventUsers = users;
+    window._eventClients = clients;
+}
+
+window.changeEventsCalMonth = function(delta) {
+    State.calendarMonth += delta;
+    if (State.calendarMonth > 12) { State.calendarMonth = 1; State.calendarYear += 1; State.eventsYear += 1; }
+    if (State.calendarMonth < 1)  { State.calendarMonth = 12; State.calendarYear -= 1; State.eventsYear -= 1; }
+    renderPage();
+};
+
+// ─────────────────────────────────────────────
+// Clients Config Page
+// ─────────────────────────────────────────────
+
+async function loadClientsConfig(container) {
+    const isAdmin = State.user.role === 'admin';
+    const clients = await api('/api/clients');
+    State.clients = clients;
+    window._eventClients = clients;
+
+    const byTypology = {};
+    for (const c of clients) {
+        if (!byTypology[c.typology]) byTypology[c.typology] = [];
+        byTypology[c.typology].push(c);
+    }
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <h1>🏢 Clientes</h1>
+                <p>Configuración y tipología de clientes / propiedades</p>
+            </div>
+            ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateClientModal()">＋ Nuevo Cliente</button>` : ''}
+        </div>
+
+        <!-- Stats quick -->
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:var(--space-lg);">
+            ${EVENT_TYPOLOGIES.map(typ => {
+                const count = clients.filter(c => c.typology === typ).length;
+                return count > 0 ? `<div class="stat-card info" style="border-top:3px solid ${TYPOLOGY_COLORS[typ]};">
+                    <div class="stat-value">${count}</div>
+                    <div class="stat-label">${typ}</div>
+                </div>` : '';
+            }).join('')}
+        </div>
+
+        <!-- Client cards by typology -->
+        ${Object.entries(byTypology).sort().map(([typ, list]) => `
+        <div class="panel" style="margin-bottom:var(--space-lg);">
+            <div class="panel-header">
+                <h2>${typologyBadge(typ)} ${typ}</h2>
+                <span style="font-size:0.8rem;color:var(--text-muted);">${list.length} cliente(s)</span>
+            </div>
+            <div class="panel-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--space-md);">
+                ${list.map(c => `
+                <div class="panel" style="margin:0;border-top:4px solid ${c.color};padding:0;">
+                    <div style="padding:var(--space-md);">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                            <div>
+                                <div style="font-weight:700;font-size:0.95rem;margin-bottom:4px;">${esc(c.name)}</div>
+                                <div style="font-size:0.78rem;color:var(--text-muted);">${c.total_events} evento(s) · ${c.upcoming_events} próximos</div>
+                            </div>
+                            ${isAdmin ? `<div style="display:flex;gap:4px;">
+                                <button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${c.id})" title="Editar">✏️</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteClient(${c.id})" title="Eliminar">🗑️</button>
+                            </div>` : ''}
+                        </div>
+                        ${c.notes ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;">${esc(c.notes)}</div>` : ''}
+                        <div style="margin-top:8px;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <div style="width:14px;height:14px;border-radius:3px;background:${c.color};border:1px solid rgba(255,255,255,0.15);"></div>
+                                <span style="font-size:0.75rem;color:var(--text-muted);">${c.color}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>`).join('')}
+            </div>
+        </div>`).join('')}
+
+        ${clients.length === 0 ? `<div class="empty-state"><div class="empty-icon">🏢</div><h3>No hay clientes configurados</h3><p>Crea el primer cliente para empezar a gestionar eventos.</p></div>` : ''}
+    </div>`;
+}
+
+function clientFormHTML(c) {
+    const typOpts = EVENT_TYPOLOGIES.map(t =>
+        `<option value="${t}" ${c && c.typology === t ? 'selected' : ''}>${t}</option>`
+    ).join('');
+    return `
+        <div class="form-group">
+            <label>Nombre del cliente *</label>
+            <input type="text" class="form-input" id="clName" value="${c ? esc(c.name) : ''}" placeholder="Nombre de la propiedad / cliente">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Tipología</label>
+                <select class="form-select" id="clTypology">${typOpts}</select>
+            </div>
+            <div class="form-group" style="width:120px;">
+                <label>Color</label>
+                <input type="color" class="form-input" id="clColor" value="${c ? c.color : '#6C5CE7'}" style="padding:4px;height:42px;cursor:pointer;">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Notas</label>
+            <input type="text" class="form-input" id="clNotes" value="${c ? esc(c.notes) : ''}" placeholder="Información adicional...">
+        </div>`;
+}
+
+window.openCreateClientModal = function() {
+    openModal(`
+    <div class="modal">
+        <div class="modal-header">
+            <h3>🏢 Nuevo Cliente</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">${clientFormHTML(null)}</div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitCreateClient()">Crear</button>
+        </div>
+    </div>`);
+};
+
+window.submitCreateClient = async function() {
+    const name = document.getElementById('clName').value.trim();
+    const typology = document.getElementById('clTypology').value;
+    const color = document.getElementById('clColor').value;
+    const notes = document.getElementById('clNotes').value;
+    if (!name) { showToast('El nombre es obligatorio', 'error'); return; }
+    try {
+        await api('/api/clients', { method: 'POST', body: JSON.stringify({ name, typology, color, notes }) });
+        closeModal();
+        showToast('Cliente creado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.openEditClientModal = function(id) {
+    const c = State.clients.find(x => x.id === id);
+    if (!c) return;
+    openModal(`
+    <div class="modal">
+        <div class="modal-header">
+            <h3>✏️ Editar — ${esc(c.name)}</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">${clientFormHTML(c)}</div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitEditClient(${id})">Guardar</button>
+        </div>
+    </div>`);
+};
+
+window.submitEditClient = async function(id) {
+    const name = document.getElementById('clName').value.trim();
+    const typology = document.getElementById('clTypology').value;
+    const color = document.getElementById('clColor').value;
+    const notes = document.getElementById('clNotes').value;
+    if (!name) { showToast('El nombre es obligatorio', 'error'); return; }
+    try {
+        await api(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify({ name, typology, color, notes }) });
+        closeModal();
+        showToast('Cliente actualizado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.deleteClient = async function(id) {
+    if (!confirm('¿Eliminar este cliente? Los eventos asociados quedarán sin cliente asignado.')) return;
+    try {
+        await api(`/api/clients/${id}`, { method: 'DELETE' });
+        showToast('Cliente eliminado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
 
 // ─────────────────────────────────────────────
 // Sick Leaves Page

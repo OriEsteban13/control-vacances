@@ -1841,3 +1841,38 @@ textarea.form-input {
     height: 64px;
     font-size: 1.1rem;
 }
+
+
+/* ─── Events Calendar ─────────────────────── */
+
+.cal-cell {
+    vertical-align: top;
+    padding: 6px 4px;
+    min-width: 80px;
+    min-height: 90px;
+    border: 1px solid var(--border-color);
+    font-size: 0.78rem;
+}
+.cal-cell.empty { background: transparent; border-color: transparent; }
+.cal-cell.today { background: rgba(108, 92, 231, 0.08); }
+.cal-day-num {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-align: right;
+    padding-right: 2px;
+}
+.cal-cell.today .cal-day-num {
+    color: var(--accent-secondary);
+}
+.cal-event-chip {
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+    font-size: 0.7rem;
+}

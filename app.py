@@ -434,6 +434,90 @@ class SickLeave(db.Model):
         }
 
 
+class Client(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    typology = db.Column(db.String(50), nullable=False, default='Otro')
+    color = db.Column(db.String(7), default='#6C5CE7')
+    notes = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    events = db.relationship('Event', backref='client', lazy=True)
+
+    def to_dict(self):
+        upcoming = sum(1 for e in self.events if e.end_date >= date.today())
+        return {
+            'id': self.id,
+            'name': self.name,
+            'typology': self.typology,
+            'color': self.color,
+            'notes': self.notes,
+            'total_events': len(self.events),
+            'upcoming_events': upcoming,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=True)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    location = db.Column(db.String(200), default='')
+    notes = db.Column(db.Text, default='')
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    assignments = db.relationship('EventAssignment', backref='event', lazy=True, cascade='all, delete-orphan')
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    @property
+    def duration_days(self):
+        return (self.end_date - self.start_date).days + 1
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'client_id': self.client_id,
+            'client_name': self.client.name if self.client else None,
+            'client_color': self.client.color if self.client else '#6C5CE7',
+            'client_typology': self.client.typology if self.client else None,
+            'start_date': self.start_date.isoformat(),
+            'end_date': self.end_date.isoformat(),
+            'location': self.location,
+            'notes': self.notes,
+            'duration_days': self.duration_days,
+            'assignments': [a.to_dict() for a in self.assignments],
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class EventAssignment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    role = db.Column(db.String(200), default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    employee = db.relationship('User', foreign_keys=[user_id])
+    __table_args__ = (db.UniqueConstraint('event_id', 'user_id', name='uq_event_assignment'),)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'event_id': self.event_id,
+            'user_id': self.user_id,
+            'employee_name': self.employee.full_name if self.employee else 'Unknown',
+            'employee_initials': self.employee.initials if self.employee else '??',
+            'employee_avatar_color': self.employee.avatar_color if self.employee else '#666',
+            'employee_avatar_image': self.employee.avatar_image if self.employee else None,
+            'role': self.role,
+        }
+
+
 class ManagerDelegation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     delegator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -1539,6 +1623,260 @@ def get_late_ranking():
         'total_minutes': int(r[6] or 0),
         'initials': f"{r[1][0]}{r[2][0]}".upper(),
     } for r in ranking])
+
+
+# ─────────────────────────────────────────────
+# API Routes — Clients
+# ─────────────────────────────────────────────
+
+@app.route('/api/clients', methods=['GET'])
+@login_required
+def get_clients():
+    clients = Client.query.order_by(Client.typology, Client.name).all()
+    return jsonify([c.to_dict() for c in clients])
+
+
+@app.route('/api/clients', methods=['POST'])
+@login_required
+def create_client():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'Nombre requerido'}), 400
+    if Client.query.filter_by(name=name).first():
+        return jsonify({'success': False, 'error': 'El cliente ya existe'}), 400
+    client = Client(
+        name=name,
+        typology=data.get('typology', 'Otro'),
+        color=data.get('color', '#6C5CE7'),
+        notes=data.get('notes', ''),
+    )
+    db.session.add(client)
+    db.session.commit()
+    log_audit('create_client', 'client', client.id, f"name={name}")
+    return jsonify({'success': True, 'client': client.to_dict()})
+
+
+@app.route('/api/clients/<int:client_id>', methods=['PUT'])
+@login_required
+def update_client(client_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    client = db.session.get(Client, client_id)
+    if not client:
+        return jsonify({'success': False, 'error': 'Cliente no encontrado'}), 404
+    data = request.get_json() or {}
+    if 'name' in data:
+        client.name = data['name'].strip()
+    if 'typology' in data:
+        client.typology = data['typology']
+    if 'color' in data:
+        client.color = data['color']
+    if 'notes' in data:
+        client.notes = data['notes']
+    db.session.commit()
+    return jsonify({'success': True, 'client': client.to_dict()})
+
+
+@app.route('/api/clients/<int:client_id>', methods=['DELETE'])
+@login_required
+def delete_client(client_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    client = db.session.get(Client, client_id)
+    if not client:
+        return jsonify({'success': False, 'error': 'Cliente no encontrado'}), 404
+    db.session.delete(client)
+    db.session.commit()
+    log_audit('delete_client', 'client', client_id)
+    return jsonify({'success': True})
+
+
+# ─────────────────────────────────────────────
+# API Routes — Events
+# ─────────────────────────────────────────────
+
+@app.route('/api/events', methods=['GET'])
+@login_required
+def get_events():
+    year = request.args.get('year', type=int)
+    client_id = request.args.get('client_id', type=int)
+    upcoming = request.args.get('upcoming', '')
+    user_id = request.args.get('user_id', type=int)
+
+    query = Event.query
+    if year:
+        query = query.filter(
+            db.or_(
+                db.extract('year', Event.start_date) == year,
+                db.extract('year', Event.end_date) == year,
+            )
+        )
+    if client_id:
+        query = query.filter(Event.client_id == client_id)
+    if upcoming == 'true':
+        query = query.filter(Event.end_date >= date.today())
+    if user_id:
+        query = query.join(EventAssignment, EventAssignment.event_id == Event.id)\
+                     .filter(EventAssignment.user_id == user_id)
+
+    events = query.order_by(Event.start_date).all()
+    return jsonify([e.to_dict() for e in events])
+
+
+@app.route('/api/events/stats', methods=['GET'])
+@login_required
+def get_events_stats():
+    today = date.today()
+    year = request.args.get('year', today.year, type=int)
+
+    all_events = Event.query.filter(
+        db.or_(
+            db.extract('year', Event.start_date) == year,
+            db.extract('year', Event.end_date) == year,
+        )
+    ).all()
+
+    upcoming_events = [e for e in all_events if e.end_date >= today]
+
+    by_client = {}
+    for e in all_events:
+        key = e.client.name if e.client else 'Sin cliente'
+        if key not in by_client:
+            by_client[key] = {
+                'count': 0, 'upcoming': 0,
+                'color': e.client.color if e.client else '#6C5CE7',
+                'typology': e.client.typology if e.client else 'Otro',
+            }
+        by_client[key]['count'] += 1
+        if e.end_date >= today:
+            by_client[key]['upcoming'] += 1
+
+    by_employee = {}
+    for e in all_events:
+        for a in e.assignments:
+            if not a.employee or a.employee.is_deleted:
+                continue
+            key = a.employee.full_name
+            if key not in by_employee:
+                by_employee[key] = {
+                    'count': 0, 'upcoming': 0,
+                    'color': a.employee.avatar_color,
+                    'initials': a.employee.initials,
+                    'avatar': a.employee.avatar_image,
+                }
+            by_employee[key]['count'] += 1
+            if e.end_date >= today:
+                by_employee[key]['upcoming'] += 1
+
+    total_assignment_days = sum(
+        e.duration_days for e in all_events for _ in e.assignments
+    )
+
+    return jsonify({
+        'total': len(all_events),
+        'upcoming': len(upcoming_events),
+        'clients_active': len(by_client),
+        'total_assignment_days': total_assignment_days,
+        'by_client': by_client,
+        'by_employee': by_employee,
+        'year': year,
+    })
+
+
+@app.route('/api/events', methods=['POST'])
+@login_required
+def create_event():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'Nombre del evento requerido'}), 400
+    try:
+        start = date_parser.parse(data['start_date']).date()
+        end = date_parser.parse(data['end_date']).date()
+    except (KeyError, ValueError):
+        return jsonify({'success': False, 'error': 'Fechas inválidas'}), 400
+    if end < start:
+        return jsonify({'success': False, 'error': 'La fecha de fin debe ser posterior a la de inicio'}), 400
+
+    event = Event(
+        name=name,
+        client_id=data.get('client_id') or None,
+        start_date=start,
+        end_date=end,
+        location=data.get('location', ''),
+        notes=data.get('notes', ''),
+        created_by=current_user.id,
+    )
+    db.session.add(event)
+    db.session.flush()
+
+    for uid in data.get('user_ids', []):
+        try:
+            db.session.add(EventAssignment(event_id=event.id, user_id=int(uid), role=data.get('role', '')))
+        except Exception:
+            pass
+
+    db.session.commit()
+    log_audit('create_event', 'event', event.id, f"name={name}")
+    return jsonify({'success': True, 'event': event.to_dict()})
+
+
+@app.route('/api/events/<int:event_id>', methods=['PUT'])
+@login_required
+def update_event(event_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    event = db.session.get(Event, event_id)
+    if not event:
+        return jsonify({'success': False, 'error': 'Evento no encontrado'}), 404
+    data = request.get_json() or {}
+    if 'name' in data:
+        event.name = data['name'].strip()
+    if 'client_id' in data:
+        event.client_id = data['client_id'] or None
+    if 'start_date' in data:
+        try:
+            event.start_date = date_parser.parse(data['start_date']).date()
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Fecha de inicio inválida'}), 400
+    if 'end_date' in data:
+        try:
+            event.end_date = date_parser.parse(data['end_date']).date()
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Fecha de fin inválida'}), 400
+    if 'location' in data:
+        event.location = data['location']
+    if 'notes' in data:
+        event.notes = data['notes']
+    if 'user_ids' in data:
+        EventAssignment.query.filter_by(event_id=event_id).delete()
+        for uid in data['user_ids']:
+            try:
+                db.session.add(EventAssignment(event_id=event_id, user_id=int(uid)))
+            except Exception:
+                pass
+    db.session.commit()
+    log_audit('update_event', 'event', event_id)
+    return jsonify({'success': True, 'event': event.to_dict()})
+
+
+@app.route('/api/events/<int:event_id>', methods=['DELETE'])
+@login_required
+def delete_event(event_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    event = db.session.get(Event, event_id)
+    if not event:
+        return jsonify({'success': False, 'error': 'Evento no encontrado'}), 404
+    log_audit('delete_event', 'event', event_id)
+    db.session.delete(event)
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 # ─────────────────────────────────────────────
