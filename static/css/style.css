@@ -1876,3 +1876,78 @@ textarea.form-input {
     cursor: default;
     font-size: 0.7rem;
 }
+
+/* ─── Events Calendar v2 (spanning-bar design) ─────────── */
+.evt-cal-wrapper { overflow-x: auto; min-width: 420px; }
+.evt-cal-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 2px;
+}
+.evt-cal-head-cell {
+    text-align: center;
+    padding: 10px 4px 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.evt-cal-week {
+    position: relative;
+    border-bottom: 1px solid var(--border-color);
+}
+.evt-cal-week:last-child { border-bottom: none; }
+.evt-day-nums {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    pointer-events: none;
+    z-index: 0;
+}
+.evt-day-num {
+    text-align: right;
+    padding: 5px 9px 0;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    line-height: 1;
+}
+.evt-day-num.out-month { opacity: 0.3; }
+.evt-today-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: var(--accent-primary, #6C5CE7);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.evt-bar {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    padding: 0 7px;
+    overflow: hidden;
+    cursor: default;
+    opacity: 0.88;
+    transition: opacity 0.13s, filter 0.13s;
+    z-index: 1;
+}
+.evt-bar:hover { opacity: 1; filter: brightness(1.1); z-index: 10; }
+.evt-bar-label {
+    font-size: 0.67rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.95);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}

@@ -28,6 +28,10 @@ const State = {
     clients: [],
     events: [],
     eventsYear: new Date().getFullYear(),
+    eventsCalMonth: new Date().getMonth() + 1,
+    eventsFilterClient: null,
+    eventsFilterTypology: null,
+    eventsFilterUser: null,
     lang: localStorage.getItem('lang') || 'es',
 };
 
@@ -2891,6 +2895,57 @@ function eventStatusBadge(ev) {
 }
 
 // ─────────────────────────────────────────────
+// Events — filter helpers
+// ─────────────────────────────────────────────
+
+function eventsFilterBar(clients, users, showEmployee = true) {
+    const typOpts = ['', ...EVENT_TYPOLOGIES].map(t =>
+        `<option value="${t}" ${State.eventsFilterTypology === t ? 'selected' : ''}>${t || 'Todas las tipologías'}</option>`
+    ).join('');
+    const clientOpts = [{ id: '', name: 'Todos los clientes' }, ...clients].map(c =>
+        `<option value="${c.id}" ${String(State.eventsFilterClient) === String(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`
+    ).join('');
+    const userOpts = showEmployee
+        ? [{ id: '', full_name: 'Todos los empleados' }, ...users].map(u =>
+            `<option value="${u.id}" ${String(State.eventsFilterUser) === String(u.id) ? 'selected' : ''}>${esc(u.full_name)}</option>`
+          ).join('')
+        : '';
+    return `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:var(--space-lg);padding:var(--space-md);background:var(--bg-glass);border-radius:var(--radius-md);border:1px solid var(--border-color);">
+        <span style="font-size:0.8rem;color:var(--text-muted);font-weight:600;">FILTROS:</span>
+        <select class="form-select" style="width:200px;" onchange="setEventsFilter('client', this.value)">${clientOpts}</select>
+        <select class="form-select" style="width:190px;" onchange="setEventsFilter('typology', this.value)">${typOpts}</select>
+        ${showEmployee ? `<select class="form-select" style="width:200px;" onchange="setEventsFilter('user', this.value)">${userOpts}</select>` : ''}
+        ${(State.eventsFilterClient || State.eventsFilterTypology || State.eventsFilterUser)
+            ? `<button class="btn btn-secondary btn-sm" onclick="clearEventsFilters()">✕ Limpiar filtros</button>` : ''}
+    </div>`;
+}
+
+window.setEventsFilter = function(type, value) {
+    const v = value === '' ? null : (isNaN(value) ? value : parseInt(value));
+    if (type === 'client')   State.eventsFilterClient   = v;
+    if (type === 'typology') State.eventsFilterTypology = typeof v === 'string' ? v : null;
+    if (type === 'user')     State.eventsFilterUser     = v;
+    renderPage();
+};
+
+window.clearEventsFilters = function() {
+    State.eventsFilterClient = null;
+    State.eventsFilterTypology = null;
+    State.eventsFilterUser = null;
+    renderPage();
+};
+
+function applyEventsFilters(events) {
+    return events.filter(e => {
+        if (State.eventsFilterClient && e.client_id !== State.eventsFilterClient) return false;
+        if (State.eventsFilterTypology && e.client_typology !== State.eventsFilterTypology) return false;
+        if (State.eventsFilterUser && !e.assignments.some(a => a.user_id === State.eventsFilterUser)) return false;
+        return true;
+    });
+}
+
+// ─────────────────────────────────────────────
 // Events Dashboard Page
 // ─────────────────────────────────────────────
 
@@ -2902,14 +2957,42 @@ async function loadEvents(container) {
         api(`/api/events/stats?year=${year}`),
         api(`/api/events?year=${year}`),
         api('/api/clients'),
-        isAdmin ? api('/api/users') : Promise.resolve([]),
+        api('/api/users'),
     ]);
     State.events = events;
     State.clients = clients;
+    window._eventClients = clients;
+    window._eventUsers = users;
 
-    const upcoming = events.filter(e => e.end_date >= new Date().toISOString().split('T')[0])
-                           .sort((a, b) => a.start_date.localeCompare(b.start_date));
-    const past = events.filter(e => e.end_date < new Date().toISOString().split('T')[0]);
+    // If filtering by employee → show employee detail view
+    if (State.eventsFilterUser) {
+        const emp = users.find(u => u.id === State.eventsFilterUser);
+        if (emp) {
+            await renderEmployeeEventDetail(container, emp, events, clients, users, isAdmin, year);
+            return;
+        }
+    }
+
+    const filtered = applyEventsFilters(events);
+    const today = new Date().toISOString().split('T')[0];
+    const upcoming = filtered.filter(e => e.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const past = filtered.filter(e => e.end_date < today);
+
+    // Recompute stats from filtered events
+    const byClientFiltered = {};
+    const byEmployeeFiltered = {};
+    for (const e of filtered) {
+        const cn = e.client_name || 'Sin cliente';
+        if (!byClientFiltered[cn]) byClientFiltered[cn] = { count: 0, upcoming: 0, color: e.client_color || '#6C5CE7', typology: e.client_typology || 'Otro' };
+        byClientFiltered[cn].count++;
+        if (e.end_date >= today) byClientFiltered[cn].upcoming++;
+        for (const a of e.assignments) {
+            const en = a.employee_name;
+            if (!byEmployeeFiltered[en]) byEmployeeFiltered[en] = { count: 0, upcoming: 0, color: a.employee_avatar_color, initials: a.employee_initials, avatar: a.employee_avatar_image };
+            byEmployeeFiltered[en].count++;
+            if (e.end_date >= today) byEmployeeFiltered[en].upcoming++;
+        }
+    }
 
     container.innerHTML = `
     <div class="page-enter">
@@ -2919,35 +3002,21 @@ async function loadEvents(container) {
                 <p>Visión global de todos los eventos y asignaciones de equipo</p>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-                <select class="form-select" id="eventsYearSel" style="width:110px;" onchange="changeEventsYear(this.value)">
+                <select class="form-select" style="width:110px;" onchange="changeEventsYear(this.value)">
                     ${[year-1, year, year+1].map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
                 </select>
                 ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
             </div>
         </div>
 
+        ${eventsFilterBar(clients, users, true)}
+
         <!-- Stats -->
         <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
-            <div class="stat-card accent">
-                <div class="stat-icon">📅</div>
-                <div class="stat-value">${stats.upcoming}</div>
-                <div class="stat-label">Próximos Eventos</div>
-            </div>
-            <div class="stat-card info">
-                <div class="stat-icon">🗂️</div>
-                <div class="stat-value">${stats.total}</div>
-                <div class="stat-label">Total ${year}</div>
-            </div>
-            <div class="stat-card success">
-                <div class="stat-icon">🏢</div>
-                <div class="stat-value">${stats.clients_active}</div>
-                <div class="stat-label">Clientes Activos</div>
-            </div>
-            <div class="stat-card warning">
-                <div class="stat-icon">👤</div>
-                <div class="stat-value">${stats.total_assignment_days}</div>
-                <div class="stat-label">Días-Persona Asignados</div>
-            </div>
+            <div class="stat-card accent"><div class="stat-icon">📅</div><div class="stat-value">${upcoming.length}</div><div class="stat-label">Próximos Eventos</div></div>
+            <div class="stat-card info"><div class="stat-icon">🗂️</div><div class="stat-value">${filtered.length}</div><div class="stat-label">Total ${year}</div></div>
+            <div class="stat-card success"><div class="stat-icon">🏢</div><div class="stat-value">${Object.keys(byClientFiltered).length}</div><div class="stat-label">Clientes</div></div>
+            <div class="stat-card warning"><div class="stat-icon">👤</div><div class="stat-value">${filtered.reduce((s,e)=>s+e.assignments.length*e.duration_days,0)}</div><div class="stat-label">Días-Persona</div></div>
         </div>
 
         <!-- Próximos eventos -->
@@ -2958,98 +3027,211 @@ async function loadEvents(container) {
             </div>
             <div class="panel-body no-padding">
                 ${upcoming.length === 0
-                    ? '<div class="empty-state" style="padding:32px;"><p>No hay próximos eventos para ' + year + '.</p></div>'
+                    ? `<div class="empty-state" style="padding:32px;"><p>No hay próximos eventos${State.eventsFilterClient||State.eventsFilterTypology ? ' con los filtros aplicados' : ' para '+year}.</p></div>`
                     : `<table class="data-table">
                         <thead><tr>
-                            <th>Evento</th>
-                            <th>Cliente</th>
-                            <th>Tipología</th>
-                            <th>Fechas</th>
-                            <th>Días</th>
-                            <th>Equipo asignado</th>
-                            <th>Estado</th>
-                            ${isAdmin ? '<th>Acciones</th>' : ''}
+                            <th>Evento</th><th>Cliente</th><th>Tipología</th>
+                            <th>Fechas</th><th>Días</th><th>Equipo asignado</th><th>Estado</th>
+                            ${isAdmin ? '<th></th>' : ''}
                         </tr></thead>
-                        <tbody>
-                        ${upcoming.map(e => renderEventRow(e, isAdmin)).join('')}
-                        </tbody>
+                        <tbody>${upcoming.map(e => renderEventRow(e, isAdmin)).join('')}</tbody>
                     </table>`
                 }
             </div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);margin-bottom:var(--space-lg);">
-            <!-- Por cliente -->
             <div class="panel">
-                <div class="panel-header"><h2>🏢 Eventos por Cliente</h2></div>
+                <div class="panel-header"><h2>🏢 Por Cliente</h2></div>
                 <div class="panel-body">
-                    ${Object.keys(stats.by_client).length === 0
+                    ${Object.keys(byClientFiltered).length === 0
                         ? '<p style="color:var(--text-muted);">Sin datos.</p>'
-                        : Object.entries(stats.by_client)
-                            .sort((a,b) => b[1].count - a[1].count)
-                            .map(([name, d]) => `
-                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-                                <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0;"></div>
-                                <div style="flex:1;min-width:0;">
-                                    <div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
-                                    <div style="font-size:0.75rem;color:var(--text-muted);">${typologyBadge(d.typology)}</div>
-                                </div>
-                                <div style="text-align:right;white-space:nowrap;">
-                                    <div style="font-weight:700;font-size:1rem;">${d.count}</div>
-                                    <div style="font-size:0.72rem;color:var(--color-info);">${d.upcoming} próx.</div>
-                                </div>
-                            </div>`).join('')
+                        : Object.entries(byClientFiltered).sort((a,b)=>b[1].count-a[1].count).map(([name,d]) => `
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+                            <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0;"></div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-weight:600;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(name)}">${esc(name)}</div>
+                                <div style="margin-top:2px;">${typologyBadge(d.typology)}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-weight:700;">${d.count}</div>
+                                <div style="font-size:0.72rem;color:var(--color-info);">${d.upcoming} próx.</div>
+                            </div>
+                        </div>`).join('')
                     }
                 </div>
             </div>
-
-            <!-- Por empleado -->
             <div class="panel">
-                <div class="panel-header"><h2>👤 Eventos por Empleado</h2></div>
+                <div class="panel-header"><h2>👤 Por Empleado</h2><span style="font-size:0.75rem;color:var(--text-muted);">Clic para ver detalle</span></div>
                 <div class="panel-body">
-                    ${Object.keys(stats.by_employee).length === 0
+                    ${Object.keys(byEmployeeFiltered).length === 0
                         ? '<p style="color:var(--text-muted);">Sin asignaciones.</p>'
-                        : Object.entries(stats.by_employee)
-                            .sort((a,b) => b[1].upcoming - a[1].upcoming || b[1].count - a[1].count)
-                            .map(([name, d]) => `
-                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                        : Object.entries(byEmployeeFiltered).sort((a,b)=>b[1].upcoming-a[1].upcoming||b[1].count-a[1].count).map(([name,d]) => {
+                            const u = users.find(u => u.full_name === name);
+                            return `<div onclick="${u ? `setEventsFilter('user',${u.id})` : ''}" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:${u?'pointer':'default'};padding:6px 8px;border-radius:var(--radius-sm);transition:background 0.15s;" onmouseover="this.style.background='var(--bg-glass-hover)'" onmouseout="this.style.background=''">
                                 ${renderAvatarEl(d.color, d.initials, d.avatar, 32)}
                                 <div style="flex:1;min-width:0;">
                                     <div style="font-weight:600;font-size:0.85rem;">${esc(name)}</div>
-                                    <div style="font-size:0.75rem;color:var(--text-muted);">${d.upcoming} próximos · ${d.count} total ${year}</div>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);">${d.upcoming} próximos · ${d.count} total</div>
                                 </div>
-                                <div style="font-weight:700;font-size:1rem;color:var(--accent-secondary);">${d.upcoming}</div>
-                            </div>`).join('')
+                                <div style="display:flex;align-items:center;gap:6px;">
+                                    <div style="font-weight:700;font-size:1rem;color:var(--accent-secondary);">${d.upcoming}</div>
+                                    ${u ? '<span style="font-size:0.7rem;color:var(--text-dim);">→</span>' : ''}
+                                </div>
+                            </div>`;
+                        }).join('')
                     }
                 </div>
             </div>
         </div>
 
-        <!-- Histórico -->
         ${past.length > 0 ? `
         <div class="panel">
-            <div class="panel-header">
-                <h2>🗂️ Historial ${year}</h2>
-                <span style="font-size:0.8rem;color:var(--text-muted);">${past.length} evento(s) finalizados</span>
-            </div>
+            <div class="panel-header"><h2>🗂️ Historial ${year}</h2><span style="font-size:0.8rem;color:var(--text-muted);">${past.length} finalizado(s)</span></div>
             <div class="panel-body no-padding">
                 <table class="data-table">
-                    <thead><tr>
-                        <th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Equipo</th><th>Estado</th>
-                        ${isAdmin ? '<th>Acciones</th>' : ''}
-                    </tr></thead>
-                    <tbody>
-                    ${past.slice().reverse().map(e => renderEventRow(e, isAdmin)).join('')}
+                    <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Equipo</th><th>Estado</th>${isAdmin?'<th></th>':''}</tr></thead>
+                    <tbody>${past.slice().reverse().map(e => renderEventRow(e, isAdmin)).join('')}</tbody>
+                </table>
+            </div>
+        </div>` : ''}
+    </div>`;
+}
+
+// ─────────────────────────────────────────────
+// Employee Events Detail View
+// ─────────────────────────────────────────────
+
+async function renderEmployeeEventDetail(container, emp, allEvents, clients, users, isAdmin, year) {
+    const today = new Date().toISOString().split('T')[0];
+    const empEvents = allEvents
+        .filter(e => e.assignments.some(a => a.user_id === emp.id))
+        .sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+    const upcoming = empEvents.filter(e => e.end_date >= today);
+    const past = empEvents.filter(e => e.end_date < today);
+    const totalDays = empEvents.reduce((s, e) => s + e.duration_days, 0);
+
+    // Group events by month for timeline
+    const byMonth = {};
+    empEvents.forEach(e => {
+        const key = e.start_date.slice(0, 7);
+        if (!byMonth[key]) byMonth[key] = [];
+        byMonth[key].push(e);
+    });
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header">
+            <div class="page-header-actions">
+                <div style="display:flex;align-items:center;gap:var(--space-lg);">
+                    <div>
+                        <button class="btn btn-secondary btn-sm" onclick="clearEventsFilters()" style="margin-bottom:10px;">← Volver al Dashboard</button>
+                        <div style="display:flex;align-items:center;gap:var(--space-md);">
+                            <div class="employee-avatar-lg" style="background:${emp.avatar_image ? 'transparent' : emp.avatar_color};width:72px;height:72px;font-size:1.4rem;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                ${emp.avatar_image ? `<img src="${emp.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">` : emp.initials}
+                            </div>
+                            <div>
+                                <h1 style="margin:0;">${esc(emp.full_name)}</h1>
+                                <p style="margin:0;">${esc(emp.department)} · ${translateRole(emp.role)}</p>
+                                <p style="margin:4px 0 0;font-size:0.8rem;color:var(--text-muted);">Detalle de eventos asignados ${year}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+            <div class="stat-card accent"><div class="stat-icon">📅</div><div class="stat-value">${upcoming.length}</div><div class="stat-label">Próximos Eventos</div></div>
+            <div class="stat-card info"><div class="stat-icon">🗂️</div><div class="stat-value">${empEvents.length}</div><div class="stat-label">Total ${year}</div></div>
+            <div class="stat-card warning"><div class="stat-icon">📆</div><div class="stat-value">${totalDays}</div><div class="stat-label">Días en Eventos</div></div>
+            <div class="stat-card success"><div class="stat-icon">🏢</div><div class="stat-value">${new Set(empEvents.map(e=>e.client_id).filter(Boolean)).size}</div><div class="stat-label">Clientes Distintos</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);">
+            <!-- Upcoming table -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>📅 Próximos Eventos</h2>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">${upcoming.length} evento(s)</span>
+                </div>
+                <div class="panel-body no-padding">
+                    ${upcoming.length === 0
+                        ? '<div style="padding:24px;text-align:center;color:var(--text-muted);">Sin próximos eventos.</div>'
+                        : `<table class="data-table">
+                            <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th></tr></thead>
+                            <tbody>${upcoming.map(e => `<tr>
+                                <td>
+                                    <div style="font-weight:600;font-size:0.85rem;">${esc(e.name)}</div>
+                                    ${e.location ? `<div style="font-size:0.72rem;color:var(--text-muted);">📍 ${esc(e.location)}</div>` : ''}
+                                </td>
+                                <td>
+                                    ${e.client_name ? `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${e.client_color || '#6C5CE7'};"></span>${esc(e.client_name)}</span>` : '—'}
+                                    ${e.client_typology ? `<div style="margin-top:2px;">${typologyBadge(e.client_typology)}</div>` : ''}
+                                </td>
+                                <td style="white-space:nowrap;font-size:0.82rem;">
+                                    ${formatDate(e.start_date)}
+                                    ${e.start_date !== e.end_date ? `<div style="color:var(--text-muted);">→ ${formatDate(e.end_date)}</div>` : ''}
+                                </td>
+                                <td style="text-align:center;">${e.duration_days}</td>
+                            </tr>`).join('')}
+                            </tbody>
+                        </table>`
+                    }
+                </div>
+            </div>
+
+            <!-- Timeline by month -->
+            <div class="panel">
+                <div class="panel-header"><h2>📆 Timeline ${year}</h2></div>
+                <div class="panel-body" style="max-height:500px;overflow-y:auto;">
+                    ${Object.keys(byMonth).length === 0
+                        ? '<p style="color:var(--text-muted);">Sin eventos este año.</p>'
+                        : Object.entries(byMonth).sort().map(([ym, evList]) => {
+                            const [y2, m2] = ym.split('-');
+                            const months = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            return `<div style="margin-bottom:var(--space-lg);">
+                                <div style="font-weight:700;font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border-color);">${months[parseInt(m2)]} ${y2}</div>
+                                ${evList.map(e => {
+                                    const evToday = e.start_date <= today && e.end_date >= today;
+                                    const isPast = e.end_date < today;
+                                    return `<div style="display:flex;gap:10px;margin-bottom:8px;padding:8px;border-radius:var(--radius-sm);background:${evToday ? 'rgba(245,158,11,0.08)' : 'var(--bg-glass)'};">
+                                        <div style="width:4px;border-radius:2px;background:${e.client_color || '#6C5CE7'};flex-shrink:0;"></div>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:600;font-size:0.83rem;${isPast?'opacity:0.6;':''}">${esc(e.name)}</div>
+                                            <div style="font-size:0.75rem;color:var(--text-muted);">${formatDate(e.start_date)}${e.start_date!==e.end_date?` → ${formatDate(e.end_date)}`:''} · ${e.duration_days}d</div>
+                                            ${e.client_name ? `<div style="font-size:0.72rem;margin-top:2px;">${typologyBadge(e.client_typology||'Otro')} ${esc(e.client_name)}</div>` : ''}
+                                        </div>
+                                        <div>${eventStatusBadge(e)}</div>
+                                    </div>`;
+                                }).join('')}
+                            </div>`;
+                        }).join('')
+                    }
+                </div>
+            </div>
+        </div>
+
+        ${past.length > 0 ? `
+        <div class="panel" style="margin-top:var(--space-lg);">
+            <div class="panel-header"><h2>🗂️ Historial Finalizado</h2><span style="font-size:0.8rem;color:var(--text-muted);">${past.length} evento(s)</span></div>
+            <div class="panel-body no-padding">
+                <table class="data-table">
+                    <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Estado</th></tr></thead>
+                    <tbody>${past.slice().reverse().map(e => `<tr>
+                        <td><strong>${esc(e.name)}</strong>${e.location?`<div style="font-size:0.72rem;color:var(--text-muted);">📍 ${esc(e.location)}</div>`:''}</td>
+                        <td>${e.client_name?`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${e.client_color};"></span>${esc(e.client_name)}</span>`:'—'}</td>
+                        <td style="white-space:nowrap;font-size:0.82rem;">${formatDate(e.start_date)}${e.start_date!==e.end_date?`<div style="color:var(--text-muted);">→ ${formatDate(e.end_date)}</div>`:''}</td>
+                        <td style="text-align:center;">${e.duration_days}</td>
+                        <td>${eventStatusBadge(e)}</td>
+                    </tr>`).join('')}
                     </tbody>
                 </table>
             </div>
         </div>` : ''}
-
     </div>`;
-
-    // Store users for modal use
-    window._eventUsers = users;
-    window._eventClients = clients;
 }
 
 function renderEventRow(e, isAdmin) {
@@ -3217,57 +3399,113 @@ window.deleteEvent = async function(id) {
 
 async function loadEventsCalendar(container) {
     const isAdmin = State.user.role === 'admin';
-    const year = State.eventsYear;
-    const month = State.calendarMonth;
+    const calYear = State.eventsYear;
+    const month   = State.eventsCalMonth;
 
-    const [events, clients, users] = await Promise.all([
-        api(`/api/events?year=${year}`),
+    const [allEvents, clients, allUsers] = await Promise.all([
+        api(`/api/events?year=${calYear}`),
         api('/api/clients'),
-        isAdmin ? api('/api/users') : Promise.resolve([]),
+        api('/api/users'),
     ]);
-    State.events = events;
+    State.events  = allEvents;
     State.clients = clients;
     window._eventClients = clients;
-    window._eventUsers = users;
+    window._eventUsers   = allUsers;
 
-    const today = new Date();
-    const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const filtered = applyEventsFilters(allEvents);
 
-    // Build calendar grid for current month
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay = new Date(year, month, 0);
-    const startWeekday = (firstDay.getDay() + 6) % 7; // Monday=0
+    const MONTHS    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const today     = new Date();
+    const todayStr  = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
-    // Get events overlapping this month
-    const monthStart = `${year}-${String(month).padStart(2,'0')}-01`;
-    const monthEnd = `${year}-${String(month).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
-    const monthEvents = events.filter(e => e.start_date <= monthEnd && e.end_date >= monthStart);
+    const firstDay      = new Date(calYear, month - 1, 1);
+    const lastDay       = new Date(calYear, month, 0);
+    const startWeekday  = (firstDay.getDay() + 6) % 7;  // Mon = 0
+    const totalDays     = lastDay.getDate();
+    const totalWeeks    = Math.ceil((startWeekday + totalDays) / 7);
+    const monthStartStr = `${calYear}-${String(month).padStart(2,'0')}-01`;
+    const monthEndStr   = `${calYear}-${String(month).padStart(2,'0')}-${String(totalDays).padStart(2,'0')}`;
+    const monthEvents   = filtered.filter(e => e.start_date <= monthEndStr && e.end_date >= monthStartStr);
 
-    // Build day cells
-    let cells = '';
-    let dayNum = 1;
-    const totalDays = lastDay.getDate();
-    const totalCells = Math.ceil((startWeekday + totalDays) / 7) * 7;
+    function parseLocalDate(s) {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
+    function daysBetween(a, b) {
+        return Math.round((parseLocalDate(b) - parseLocalDate(a)) / 86400000);
+    }
+    function toDateStr(dt) {
+        return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    }
 
-    for (let i = 0; i < totalCells; i++) {
-        const col = i % 7;
-        if (col === 0) cells += '<tr>';
-        if (i < startWeekday || dayNum > totalDays) {
-            cells += '<td class="cal-cell empty"></td>';
-        } else {
-            const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
-            const isToday = dateStr === today.toISOString().split('T')[0];
-            const dayEvents = monthEvents.filter(e => e.start_date <= dateStr && e.end_date >= dateStr);
-            cells += `<td class="cal-cell${isToday ? ' today' : ''}">
-                <div class="cal-day-num">${dayNum}</div>
-                ${dayEvents.map(e => `
-                    <div class="cal-event-chip" style="background:${e.client_color || '#6C5CE7'}22;border-left:3px solid ${e.client_color || '#6C5CE7'};color:var(--text-primary);" title="${esc(e.name)}${e.location ? ' — ' + e.location : ''}">
-                        <span style="font-size:0.7rem;font-weight:600;">${esc(e.name)}</span>
-                    </div>`).join('')}
-            </td>`;
-            dayNum++;
-        }
-        if (col === 6) cells += '</tr>';
+    const gridStart  = new Date(calYear, month - 1, 1 - startWeekday);
+    const BAR_H      = 22;
+    const BAR_GAP    = 4;
+    const DAY_H      = 30;
+    const PAD_TOP    = 4;
+    const PAD_BOTTOM = 8;
+
+    let weeksHTML = '';
+
+    for (let w = 0; w < totalWeeks; w++) {
+        const weekDays = Array.from({ length: 7 }, (_, d) => {
+            const dt = new Date(gridStart);
+            dt.setDate(gridStart.getDate() + w * 7 + d);
+            return dt;
+        });
+        const weekStartStr = toDateStr(weekDays[0]);
+        const weekEndStr   = toDateStr(weekDays[6]);
+
+        // Events overlapping this week — longer/earlier first for better row packing
+        const weekEvts = monthEvents
+            .filter(e => e.start_date <= weekEndStr && e.end_date >= weekStartStr)
+            .sort((a, b) => {
+                const sc = a.start_date.localeCompare(b.start_date);
+                return sc !== 0 ? sc : b.end_date.localeCompare(a.end_date);
+            });
+
+        // Greedy row assignment: no two bars share a column in the same row
+        const rowEndCol = [];
+        const bars = weekEvts.map(e => {
+            const sc = Math.max(0, daysBetween(weekStartStr, e.start_date));
+            const ec = Math.min(6, daysBetween(weekStartStr, e.end_date));
+            let row = 0;
+            while (rowEndCol[row] !== undefined && rowEndCol[row] >= sc) row++;
+            rowEndCol[row] = ec;
+            return {
+                e, sc, ec, row,
+                isStart: e.start_date >= weekStartStr,
+                isEnd:   e.end_date   <= weekEndStr,
+                color:   e.client_color || '#6C5CE7',
+            };
+        });
+
+        const numRows = bars.length > 0 ? Math.max(...bars.map(b => b.row)) + 1 : 0;
+        const weekH   = DAY_H + PAD_TOP + numRows * (BAR_H + BAR_GAP) + PAD_BOTTOM;
+
+        const dayNums = weekDays.map(dt => {
+            const dStr    = toDateStr(dt);
+            const inMonth = dt.getMonth() === month - 1 && dt.getFullYear() === calYear;
+            const isToday = dStr === todayStr;
+            const cls     = `evt-day-num${inMonth ? '' : ' out-month'}`;
+            return isToday
+                ? `<div class="${cls}"><span class="evt-today-dot">${dt.getDate()}</span></div>`
+                : `<div class="${cls}">${dt.getDate()}</div>`;
+        }).join('');
+
+        const barEls = bars.map(({ e, sc, ec, row, isStart, isEnd, color }) => {
+            const left  = (sc / 7 * 100).toFixed(3);
+            const width = ((ec - sc + 1) / 7 * 100).toFixed(3);
+            const top   = DAY_H + PAD_TOP + row * (BAR_H + BAR_GAP);
+            const br    = `${isStart?'5px':'2px'} ${isEnd?'5px':'2px'} ${isEnd?'5px':'2px'} ${isStart?'5px':'2px'}`;
+            const bleft = !isStart ? 'border-left:2px dashed rgba(255,255,255,0.4);' : '';
+            const bright= !isEnd   ? 'border-right:2px dashed rgba(255,255,255,0.4);' : '';
+            const names = (e.assignments||[]).map(a=>a.user_name||a.full_name||'').filter(Boolean);
+            const tip   = `${e.name}${e.location?' · '+e.location:''}${names.length?' · '+names.join(', '):''}`;
+            return `<div class="evt-bar" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright}" title="${esc(tip)}">${isStart?`<span class="evt-bar-label">${esc(e.name)}</span>`:''}</div>`;
+        }).join('');
+
+        weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
     }
 
     container.innerHTML = `
@@ -3275,55 +3513,48 @@ async function loadEventsCalendar(container) {
         <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
             <div>
                 <h1>📆 Calendario de Eventos</h1>
-                <p>Vista mensual de todos los eventos</p>
+                <p>${MONTHS[month-1]} ${calYear} · ${monthEvents.length} evento${monthEvents.length !== 1 ? 's' : ''}</p>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-                ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
-            </div>
+            ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
         </div>
 
+        ${eventsFilterBar(clients, allUsers)}
+
         <div class="panel">
-            <div class="panel-header" style="justify-content:space-between;">
+            <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center;">
                 <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(-1)">← Anterior</button>
-                <h2 style="margin:0;">${months[month-1]} ${year}</h2>
+                <h2 style="margin:0;font-size:1rem;">${MONTHS[month-1]} ${calYear}</h2>
                 <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(1)">Siguiente →</button>
             </div>
-            <div class="panel-body no-padding" style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;">
-                    <thead>
-                        <tr>${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d =>
-                            `<th style="padding:10px 8px;font-size:0.78rem;color:var(--text-muted);font-weight:600;text-align:center;border-bottom:1px solid var(--border-color);">${d}</th>`
-                        ).join('')}</tr>
-                    </thead>
-                    <tbody>${cells}</tbody>
-                </table>
+            <div class="panel-body no-padding" style="padding:0 8px 8px;">
+                <div class="evt-cal-wrapper">
+                    <div class="evt-cal-header">
+                        ${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=>`<div class="evt-cal-head-cell">${d}</div>`).join('')}
+                    </div>
+                    ${weeksHTML}
+                </div>
             </div>
         </div>
 
-        <!-- Legend -->
         ${clients.length > 0 ? `
         <div class="panel">
-            <div class="panel-header"><h2>Leyenda Clientes</h2></div>
-            <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:12px;">
-                ${clients.map(c => `
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <div style="width:12px;height:12px;border-radius:3px;background:${c.color};"></div>
-                        <span style="font-size:0.82rem;">${esc(c.name)}</span>
+            <div class="panel-header"><h2>Leyenda</h2></div>
+            <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:14px;">
+                ${clients.map(c=>`
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:18px;height:10px;border-radius:3px;background:${c.color};"></div>
+                        <span style="font-size:0.83rem;font-weight:500;">${esc(c.name)}</span>
                         ${typologyBadge(c.typology)}
                     </div>`).join('')}
             </div>
         </div>` : ''}
     </div>`;
-
-    // Store for modal
-    window._eventUsers = users;
-    window._eventClients = clients;
 }
 
 window.changeEventsCalMonth = function(delta) {
-    State.calendarMonth += delta;
-    if (State.calendarMonth > 12) { State.calendarMonth = 1; State.calendarYear += 1; State.eventsYear += 1; }
-    if (State.calendarMonth < 1)  { State.calendarMonth = 12; State.calendarYear -= 1; State.eventsYear -= 1; }
+    State.eventsCalMonth += delta;
+    if (State.eventsCalMonth > 12) { State.eventsCalMonth = 1;  State.eventsYear++; }
+    if (State.eventsCalMonth < 1)  { State.eventsCalMonth = 12; State.eventsYear--; }
     renderPage();
 };
 
