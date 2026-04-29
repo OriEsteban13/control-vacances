@@ -1277,7 +1277,19 @@ def delete_user(user_id):
 
     log_audit('delete_user', 'user', user.id, f"username={user.username}")
 
-    # GDPR soft-delete: anonymise personal data, keep vacation records
+    # Remove pending and future vacation requests (no longer relevant)
+    today = date.today()
+    VacationRequest.query.filter(
+        VacationRequest.user_id == user_id,
+        VacationRequest.status == 'pending'
+    ).delete(synchronize_session=False)
+    VacationRequest.query.filter(
+        VacationRequest.user_id == user_id,
+        VacationRequest.status.in_(['approved', 'cancel_requested']),
+        VacationRequest.start_date >= today
+    ).delete(synchronize_session=False)
+
+    # GDPR soft-delete: anonymise personal data, keep past approved records
     user.is_deleted = True
     user.deleted_at = datetime.utcnow()
     user.first_name = 'Empleado'

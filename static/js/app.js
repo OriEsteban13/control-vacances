@@ -32,6 +32,7 @@ const State = {
     eventsFilterClient: null,
     eventsFilterTypology: null,
     eventsFilterUser: null,
+    selectedClientId: null,
     lang: localStorage.getItem('lang') || 'es',
 };
 
@@ -3005,6 +3006,7 @@ async function loadEvents(container) {
                 <select class="form-select" style="width:110px;" onchange="changeEventsYear(this.value)">
                     ${[year-1, year, year+1].map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
                 </select>
+                <button class="btn btn-secondary" onclick="exportEventsDashboardCSV()">⬇ CSV</button>
                 ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
             </div>
         </div>
@@ -3500,9 +3502,10 @@ async function loadEventsCalendar(container) {
             const br    = `${isStart?'5px':'2px'} ${isEnd?'5px':'2px'} ${isEnd?'5px':'2px'} ${isStart?'5px':'2px'}`;
             const bleft = !isStart ? 'border-left:2px dashed rgba(255,255,255,0.4);' : '';
             const bright= !isEnd   ? 'border-right:2px dashed rgba(255,255,255,0.4);' : '';
-            const names = (e.assignments||[]).map(a=>a.user_name||a.full_name||'').filter(Boolean);
+            const names = (e.assignments||[]).map(a=>a.employee_name||'').filter(Boolean);
             const tip   = `${e.name}${e.location?' · '+e.location:''}${names.length?' · '+names.join(', '):''}`;
-            return `<div class="evt-bar" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright}" title="${esc(tip)}">${isStart?`<span class="evt-bar-label">${esc(e.name)}</span>`:''}</div>`;
+            const label = names.length ? `${e.name} · ${names.join(', ')}` : e.name;
+            return `<div class="evt-bar" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright}" title="${esc(tip)}">${isStart?`<span class="evt-bar-label">${esc(label)}</span>`:''}</div>`;
         }).join('');
 
         weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
@@ -3515,7 +3518,10 @@ async function loadEventsCalendar(container) {
                 <h1>📆 Calendario de Eventos</h1>
                 <p>${MONTHS[month-1]} ${calYear} · ${monthEvents.length} evento${monthEvents.length !== 1 ? 's' : ''}</p>
             </div>
-            ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" onclick="exportEventsCalendarCSV()">⬇ CSV</button>
+                ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
+            </div>
         </div>
 
         ${eventsFilterBar(clients, allUsers)}
@@ -3564,10 +3570,166 @@ window.changeEventsCalMonth = function(delta) {
 
 async function loadClientsConfig(container) {
     const isAdmin = State.user.role === 'admin';
-    const clients = await api('/api/clients');
-    State.clients = clients;
+    const [clients, allEvents] = await Promise.all([
+        api('/api/clients'),
+        api(`/api/events?year=${State.eventsYear}`),
+    ]);
+    State.clients   = clients;
+    State.events    = allEvents;
     window._eventClients = clients;
+    window._eventUsers   = window._eventUsers || [];
 
+    // ── Client Detail View ──
+    if (State.selectedClientId) {
+        const client = clients.find(c => c.id === State.selectedClientId);
+        if (!client) { State.selectedClientId = null; renderPage(); return; }
+        const clientEvents = allEvents
+            .filter(e => e.client_id === client.id)
+            .sort((a,b) => a.start_date.localeCompare(b.start_date));
+        const todayStr = new Date().toISOString().split('T')[0];
+        const past     = clientEvents.filter(e => e.end_date < todayStr);
+        const upcoming = clientEvents.filter(e => e.end_date >= todayStr);
+        const total    = clientEvents.length;
+        const donePct  = total > 0 ? Math.round(past.length / total * 100) : 0;
+        const pendPct  = 100 - donePct;
+
+        // Collect all unique employees across events
+        const empMap = {};
+        for (const e of clientEvents) {
+            for (const a of (e.assignments||[])) {
+                if (!empMap[a.user_id]) empMap[a.user_id] = { name: a.employee_name, initials: a.employee_initials, color: a.employee_avatar_color, avatar: a.employee_avatar_image, count: 0, days: 0 };
+                empMap[a.user_id].count++;
+                empMap[a.user_id].days += e.duration_days;
+            }
+        }
+        const employees = Object.values(empMap).sort((a,b) => b.days - a.days);
+
+        container.innerHTML = `
+        <div class="page-enter">
+            <button class="btn btn-secondary btn-sm" style="margin-bottom:var(--space-lg);" onclick="State.selectedClientId=null;renderPage();">← Volver a Clientes</button>
+
+            <!-- Client header -->
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:var(--space-xl);">
+                <div style="width:52px;height:52px;border-radius:var(--radius-md);background:${client.color};display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;">🏢</div>
+                <div style="flex:1;">
+                    <h1 style="margin:0;">${esc(client.name)}</h1>
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+                        ${typologyBadge(client.typology)}
+                        ${client.notes ? `<span style="font-size:0.82rem;color:var(--text-muted);">${esc(client.notes)}</span>` : ''}
+                    </div>
+                </div>
+                ${isAdmin ? `<div style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${client.id})">✏️ Editar</button>
+                    <button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>
+                </div>` : ''}
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:var(--space-xl);">
+                <div class="stat-card info"><div class="stat-icon">📅</div><div class="stat-value">${total}</div><div class="stat-label">Total Eventos</div></div>
+                <div class="stat-card success"><div class="stat-icon">✅</div><div class="stat-value">${past.length}</div><div class="stat-label">Realizados</div></div>
+                <div class="stat-card warning"><div class="stat-icon">⏳</div><div class="stat-value">${upcoming.length}</div><div class="stat-label">Próximos</div></div>
+                <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value">${employees.length}</div><div class="stat-label">Empleados</div></div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);margin-bottom:var(--space-lg);">
+                <!-- Progress chart -->
+                <div class="panel">
+                    <div class="panel-header"><h2>Progreso de Eventos</h2></div>
+                    <div class="panel-body" style="display:flex;align-items:center;gap:24px;">
+                        <div style="position:relative;width:100px;height:100px;flex-shrink:0;">
+                            <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);width:100px;height:100px;">
+                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border-color)" stroke-width="3.5"/>
+                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="${client.color}" stroke-width="3.5"
+                                    stroke-dasharray="${donePct} ${100-donePct}" stroke-linecap="round"/>
+                            </svg>
+                            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                                <span style="font-size:1.2rem;font-weight:800;">${donePct}%</span>
+                                <span style="font-size:0.6rem;color:var(--text-muted);">hecho</span>
+                            </div>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="margin-bottom:10px;">
+                                <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:4px;">
+                                    <span>Realizados</span><span style="font-weight:700;color:${client.color};">${past.length}</span>
+                                </div>
+                                <div style="height:8px;background:var(--border-color);border-radius:4px;overflow:hidden;">
+                                    <div style="height:100%;width:${donePct}%;background:${client.color};border-radius:4px;transition:width 0.5s;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:4px;">
+                                    <span>Próximos</span><span style="font-weight:700;color:var(--text-muted);">${upcoming.length}</span>
+                                </div>
+                                <div style="height:8px;background:var(--border-color);border-radius:4px;overflow:hidden;">
+                                    <div style="height:100%;width:${pendPct}%;background:var(--text-muted);opacity:0.4;border-radius:4px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employees -->
+                <div class="panel">
+                    <div class="panel-header"><h2>Equipo asignado</h2></div>
+                    <div class="panel-body" style="max-height:220px;overflow-y:auto;">
+                        ${employees.length === 0 ? '<p style="color:var(--text-muted);font-size:0.85rem;">Sin empleados asignados</p>' :
+                          employees.map(emp => `
+                          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                              ${renderAvatarEl(emp.color, emp.initials, emp.avatar, 32)}
+                              <div style="flex:1;"><div style="font-size:0.85rem;font-weight:600;">${esc(emp.name)}</div>
+                              <div style="font-size:0.75rem;color:var(--text-muted);">${emp.count} evento(s) · ${emp.days} día(s)</div></div>
+                          </div>`).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upcoming events -->
+            ${upcoming.length > 0 ? `
+            <div class="panel" style="margin-bottom:var(--space-lg);">
+                <div class="panel-header" style="justify-content:space-between;">
+                    <h2>⏳ Próximos eventos</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="exportClientEventsCSV(${client.id})">⬇ Exportar CSV</button>
+                </div>
+                <div class="panel-body no-padding"><table class="data-table">
+                    <thead><tr><th>Evento</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Responsable(s)</th></tr></thead>
+                    <tbody>${upcoming.map(e => `
+                        <tr>
+                            <td style="font-weight:600;">${esc(e.name)}</td>
+                            <td>${formatDate(e.start_date)}</td><td>${formatDate(e.end_date)}</td>
+                            <td>${e.duration_days}</td>
+                            <td>${(e.assignments||[]).map(a=>`<span title="${esc(a.employee_name)}">${renderAvatarEl(a.employee_avatar_color,a.employee_initials,a.employee_avatar_image,22)}</span>`).join(' ')} ${(e.assignments||[]).map(a=>esc(a.employee_name)).join(', ')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table></div>
+            </div>` : ''}
+
+            <!-- Past events -->
+            <div class="panel">
+                <div class="panel-header" style="justify-content:space-between;">
+                    <h2>✅ Historial de eventos</h2>
+                    ${past.length > 0 ? `<button class="btn btn-secondary btn-sm" onclick="exportClientEventsCSV(${client.id})">⬇ Exportar CSV</button>` : ''}
+                </div>
+                <div class="panel-body no-padding">
+                ${past.length === 0 ? '<div style="padding:var(--space-lg);text-align:center;color:var(--text-muted);">Sin eventos realizados aún</div>' :
+                `<table class="data-table">
+                    <thead><tr><th>Evento</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Responsable(s)</th></tr></thead>
+                    <tbody>${past.map(e => `
+                        <tr style="opacity:0.7;">
+                            <td style="font-weight:600;">${esc(e.name)}</td>
+                            <td>${formatDate(e.start_date)}</td><td>${formatDate(e.end_date)}</td>
+                            <td>${e.duration_days}</td>
+                            <td>${(e.assignments||[]).map(a=>esc(a.employee_name)).join(', ')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`}
+                </div>
+            </div>
+        </div>`;
+        return;
+    }
+
+    // ── Client List View ──
     const byTypology = {};
     for (const c of clients) {
         if (!byTypology[c.typology]) byTypology[c.typology] = [];
@@ -3604,24 +3766,23 @@ async function loadClientsConfig(container) {
             </div>
             <div class="panel-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--space-md);">
                 ${list.map(c => `
-                <div class="panel" style="margin:0;border-top:4px solid ${c.color};padding:0;">
+                <div class="panel" style="margin:0;border-top:4px solid ${c.color};padding:0;cursor:pointer;transition:box-shadow 0.15s;" onclick="openClientDetail(${c.id})" onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.18)'" onmouseout="this.style.boxShadow=''">
                     <div style="padding:var(--space-md);">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                             <div>
                                 <div style="font-weight:700;font-size:0.95rem;margin-bottom:4px;">${esc(c.name)}</div>
                                 <div style="font-size:0.78rem;color:var(--text-muted);">${c.total_events} evento(s) · ${c.upcoming_events} próximos</div>
                             </div>
-                            ${isAdmin ? `<div style="display:flex;gap:4px;">
+                            ${isAdmin ? `<div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
                                 <button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${c.id})" title="Editar">✏️</button>
                                 <button class="btn btn-danger btn-sm" onclick="deleteClient(${c.id})" title="Eliminar">🗑️</button>
                             </div>` : ''}
                         </div>
                         ${c.notes ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;">${esc(c.notes)}</div>` : ''}
-                        <div style="margin-top:8px;">
-                            <div style="display:flex;align-items:center;gap:6px;">
-                                <div style="width:14px;height:14px;border-radius:3px;background:${c.color};border:1px solid rgba(255,255,255,0.15);"></div>
-                                <span style="font-size:0.75rem;color:var(--text-muted);">${c.color}</span>
-                            </div>
+                        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+                            <div style="width:14px;height:14px;border-radius:3px;background:${c.color};border:1px solid rgba(255,255,255,0.15);"></div>
+                            <span style="font-size:0.75rem;color:var(--text-muted);">${c.color}</span>
+                            <span style="margin-left:auto;font-size:0.72rem;color:var(--accent-secondary);">Ver detalle →</span>
                         </div>
                     </div>
                 </div>`).join('')}
@@ -3724,6 +3885,81 @@ window.deleteClient = async function(id) {
         showToast('Cliente eliminado', 'success');
         renderPage();
     } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.openClientDetail = function(id) {
+    State.selectedClientId = id;
+    renderPage();
+};
+
+window.exportClientEventsCSV = function(clientId) {
+    const client  = State.clients.find(c => c.id === clientId);
+    const events  = (State.events || []).filter(e => e.client_id === clientId)
+                      .sort((a,b) => a.start_date.localeCompare(b.start_date));
+    const rows    = [['Evento','Cliente','Tipología','Inicio','Fin','Días','Ubicación','Responsables']];
+    for (const e of events) {
+        rows.push([
+            e.name,
+            client ? client.name : '',
+            e.client_typology || '',
+            e.start_date, e.end_date,
+            e.duration_days,
+            e.location || '',
+            (e.assignments||[]).map(a=>a.employee_name).join(' | '),
+        ]);
+    }
+    downloadCSV(rows, `eventos_${(client?.name||'cliente').replace(/\s+/g,'_')}.csv`);
+};
+
+function downloadCSV(rows, filename) {
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a   = document.createElement('a');
+    a.href    = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+window.exportEventsDashboardCSV = function() {
+    const events = applyEventsFilters(State.events || []);
+    const today  = new Date().toISOString().split('T')[0];
+    const rows   = [['Evento','Cliente','Tipología','Estado','Inicio','Fin','Días','Ubicación','Responsables']];
+    for (const e of events.sort((a,b) => a.start_date.localeCompare(b.start_date))) {
+        rows.push([
+            e.name,
+            e.client_name || '',
+            e.client_typology || '',
+            e.end_date < today ? 'Realizado' : 'Próximo',
+            e.start_date, e.end_date,
+            e.duration_days,
+            e.location || '',
+            (e.assignments||[]).map(a=>a.employee_name).join(' | '),
+        ]);
+    }
+    downloadCSV(rows, `dashboard_eventos_${State.eventsYear}.csv`);
+};
+
+window.exportEventsCalendarCSV = function() {
+    const month   = State.eventsCalMonth;
+    const calYear = State.eventsYear;
+    const pad     = n => String(n).padStart(2,'0');
+    const monthStart = `${calYear}-${pad(month)}-01`;
+    const lastDay    = new Date(calYear, month, 0).getDate();
+    const monthEnd   = `${calYear}-${pad(month)}-${pad(lastDay)}`;
+    const events  = applyEventsFilters(State.events || [])
+                      .filter(e => e.start_date <= monthEnd && e.end_date >= monthStart)
+                      .sort((a,b) => a.start_date.localeCompare(b.start_date));
+    const MONTHS  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const rows    = [['Evento','Cliente','Tipología','Inicio','Fin','Días','Ubicación','Responsables']];
+    for (const e of events) {
+        rows.push([
+            e.name, e.client_name || '', e.client_typology || '',
+            e.start_date, e.end_date, e.duration_days,
+            e.location || '',
+            (e.assignments||[]).map(a=>a.employee_name).join(' | '),
+        ]);
+    }
+    downloadCSV(rows, `calendario_eventos_${MONTHS[month-1]}_${calYear}.csv`);
 };
 
 // ─────────────────────────────────────────────
