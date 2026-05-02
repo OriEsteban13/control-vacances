@@ -2332,14 +2332,13 @@ def init_db():
                     role='admin',
                     total_days=25,
                     avatar_color='#6C5CE7',
-                    must_change_password=(admin_password == 'admin'),
                 )
                 db.session.add(admin)
-                admin.set_password(admin_password)
-                db.session.commit()
-                print(f"[init_db] ✅ Admin creado — usuario: admin")
-            else:
-                print(f"[init_db] ✅ Admin ya existente")
+            # Always sync password from env var so changing ADMIN_PASSWORD in Render takes effect
+            admin.set_password(admin_password)
+            admin.must_change_password = (admin_password == 'admin')
+            db.session.commit()
+            print(f"[init_db] ✅ Admin listo")
 
             if CompanySettings.query.count() == 0:
                 db.session.add(CompanySettings())
