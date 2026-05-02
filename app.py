@@ -34,6 +34,7 @@ if not _secret_key:
 app.config['SECRET_KEY'] = _secret_key
 
 # ─── Session cookies ───────────────────────────────────────────────────────────
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
 if os.environ.get('RENDER'):
     app.config['SESSION_COOKIE_SECURE'] = True
     app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -775,6 +776,7 @@ def api_login():
     ).first()
 
     if user and user.check_password(data.get('password', '')):
+        session.permanent = True
         login_user(user, remember=True)
         csrf_token = _generate_csrf()
         log_audit('login', 'user', user.id)
@@ -1288,6 +1290,20 @@ def delete_user(user_id):
         VacationRequest.status.in_(['approved', 'cancel_requested']),
         VacationRequest.start_date >= today
     ).delete(synchronize_session=False)
+
+    # Deactivate delegations where user is delegator or delegate
+    ManagerDelegation.query.filter(
+        db.or_(
+            ManagerDelegation.delegator_id == user_id,
+            ManagerDelegation.delegate_id == user_id,
+        )
+    ).update({'active': False}, synchronize_session=False)
+
+    # Close any open sick leave (end_date null = ongoing)
+    SickLeave.query.filter(
+        SickLeave.user_id == user_id,
+        SickLeave.end_date == None,
+    ).update({'end_date': today}, synchronize_session=False)
 
     # GDPR soft-delete: anonymise personal data, keep past approved records
     user.is_deleted = True
@@ -2265,6 +2281,34 @@ def export_backup():
 
 
 # ─────────────────────────────────────────────
+# Global Error Handlers
+# ─────────────────────────────────────────────
+
+@app.errorhandler(400)
+def bad_request(e):
+    return jsonify({'success': False, 'error': 'Solicitud incorrecta'}), 400
+
+@app.errorhandler(403)
+def forbidden(e):
+    return jsonify({'success': False, 'error': 'Acceso denegado'}), 403
+
+@app.errorhandler(404)
+def not_found(e):
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Recurso no encontrado'}), 404
+    return redirect('/dashboard')
+
+@app.errorhandler(429)
+def too_many_requests(e):
+    return jsonify({'success': False, 'error': 'Demasiados intentos. Espera un momento.'}), 429
+
+@app.errorhandler(500)
+def internal_error(e):
+    db.session.rollback()
+    return jsonify({'success': False, 'error': 'Error interno del servidor'}), 500
+
+
+# ─────────────────────────────────────────────
 # Initialize DB
 # ─────────────────────────────────────────────
 
@@ -2288,12 +2332,14 @@ def init_db():
                     role='admin',
                     total_days=25,
                     avatar_color='#6C5CE7',
-                    must_change_password=False,
+                    must_change_password=(admin_password == 'admin'),
                 )
                 db.session.add(admin)
-            admin.set_password(admin_password)
-            db.session.commit()
-            print(f"[init_db] ✅ Admin listo — usuario: admin  contrasena: {admin_password}")
+                admin.set_password(admin_password)
+                db.session.commit()
+                print(f"[init_db] ✅ Admin creado — usuario: admin")
+            else:
+                print(f"[init_db] ✅ Admin ya existente")
 
             if CompanySettings.query.count() == 0:
                 db.session.add(CompanySettings())
