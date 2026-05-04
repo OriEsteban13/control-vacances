@@ -764,7 +764,7 @@ async function loadDashboard(container) {
         <div class="stats-grid">
             <div class="stat-card accent">
                 <div class="stat-icon">📊</div>
-                <div class="stat-value">${u.days_remaining}</div>
+                <div class="stat-value">${u.days_remaining + (u.extra_days || 0)}</div>
                 <div class="stat-label">Días Disponibles</div>
                 <div class="progress-bar">
                     <div class="progress-fill ${pct > 80 ? 'high' : pct > 50 ? 'medium' : ''}"
@@ -1502,13 +1502,13 @@ async function loadTeam(container) {
                         <div class="emp-stat-label">Pendientes</div>
                     </div>
                     <div class="emp-stat">
-                        <div class="emp-stat-value remaining">${u.days_remaining}</div>
+                        <div class="emp-stat-value remaining">${u.days_remaining + (u.extra_days || 0)}${u.extra_days > 0 ? `<span style="font-size:0.65rem;vertical-align:super;color:var(--accent-secondary);">⭐</span>` : ''}</div>
                         <div class="emp-stat-label">Disponibles</div>
                     </div>
                 </div>
                 <div class="progress-bar" style="margin-top: var(--space-md);">
-                    <div class="progress-fill ${u.days_used / u.total_days > 0.8 ? 'high' : u.days_used / u.total_days > 0.5 ? 'medium' : ''}" 
-                         style="width: ${(u.days_used / u.total_days) * 100}%"></div>
+                    <div class="progress-fill ${u.days_used / (u.total_days + (u.extra_days||0)) > 0.8 ? 'high' : u.days_used / (u.total_days + (u.extra_days||0)) > 0.5 ? 'medium' : ''}"
+                         style="width: ${Math.min(100, (u.days_used / Math.max(1, u.total_days + (u.extra_days||0))) * 100)}%"></div>
                 </div>
             </div>`).join('')}
         </div>
@@ -1587,8 +1587,8 @@ async function loadEmployeeDetails(container, userId) {
             </div>
             <div class="stat-card info">
                 <div class="stat-icon">📅</div>
-                <div class="stat-value">${user.days_remaining}</div>
-                <div class="stat-label">Disponibles</div>
+                <div class="stat-value">${user.days_remaining + (user.extra_days || 0)}</div>
+                <div class="stat-label">Disponibles${user.extra_days > 0 ? ` (inc. ${user.extra_days} ⭐)` : ''}</div>
             </div>
         </div>
 
@@ -1728,9 +1728,9 @@ async function loadEmployees(container) {
                             </td>
                             <td>${esc(u.department)}</td>
                             <td><span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></td>
-                            <td style="font-weight:700;text-align:center;">${u.total_days}</td>
+                            <td style="font-weight:700;text-align:center;">${u.total_days}${u.extra_days > 0 ? `<span style="color:var(--accent-secondary);font-size:0.72rem;display:block;">+${u.extra_days}⭐</span>` : ''}</td>
                             <td style="color:var(--color-info);font-weight:600;text-align:center;">${u.days_used}</td>
-                            <td style="color:var(--color-success);font-weight:600;text-align:center;">${u.days_remaining}</td>
+                            <td style="color:var(--color-success);font-weight:600;text-align:center;">${u.days_remaining + (u.extra_days || 0)}</td>
                             <td style="white-space:nowrap;">
                                 <div class="action-btns">
                                     <button class="btn btn-secondary btn-sm" onclick="openEditUserModal(${u.id})">✏️</button>
