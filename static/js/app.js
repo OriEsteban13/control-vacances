@@ -997,7 +997,8 @@ function renderVacationTable(vacations, showActions = false) {
                         ` : v.status === 'cancel_requested' ? `
                             <button class="btn btn-success btn-sm" onclick="reviewCancelVacation(${v.id}, 'approve')" title="Aprobar cancelación">✅ Cancelar</button>
                             <button class="btn btn-secondary btn-sm" onclick="reviewCancelVacation(${v.id}, 'reject')" title="Rechazar cancelación">↩ Mantener</button>
-                        ` : '—'}
+                        ` : ''}
+                        ${State.user.role === 'admin' ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteVacation(${v.id})" title="Eliminar solicitud">🗑️</button>` : ''}
                     </div>
                 </td>
                 ` : showActions ? '<td></td>' : ''}
@@ -2409,6 +2410,17 @@ window.deleteVacation = async function(id) {
         showToast('Solicitud cancelada', 'success');
         const me = await api('/api/me');
         if (me.authenticated) State.user = me.user;
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+};
+
+window.adminDeleteVacation = async function(id) {
+    if (!confirm('¿Eliminar esta solicitud permanentemente? Esta acción no se puede deshacer.')) return;
+    try {
+        await api(`/api/vacations/${id}`, { method: 'DELETE' });
+        showToast('Solicitud eliminada', 'success');
         renderPage();
     } catch (err) {
         showToast(err.message, 'error');
