@@ -64,6 +64,7 @@ const _tr = {
         name_required: 'El nombre es obligatorio', save_changes: 'Guardar Cambios',
         lang_changed: 'Idioma cambiado a Castellano',
         extra_days: 'Días Extras', extra_days_balance: 'Días Extras Disponibles',
+        guide: 'Guía',
     },
     en: {
         dashboard: 'Dashboard', calendar: 'Calendar', my_vacations: 'My Vacations',
@@ -88,6 +89,7 @@ const _tr = {
         name_required: 'Name is required', save_changes: 'Save Changes',
         lang_changed: 'Language changed to English',
         extra_days: 'Extra Days', extra_days_balance: 'Extra Days Available',
+        guide: 'Guide',
     },
     ca: {
         dashboard: 'Tauler', calendar: 'Calendari', my_vacations: 'Les meves vacances',
@@ -112,6 +114,7 @@ const _tr = {
         name_required: 'El nom és obligatori', save_changes: 'Desar Canvis',
         lang_changed: "Idioma canviat a Català",
         extra_days: 'Dies Extres', extra_days_balance: 'Dies Extres Disponibles',
+        guide: 'Guia',
     },
 };
 
@@ -607,6 +610,10 @@ function renderLayout() {
                     <span>${t('extra_days')}</span>
                 </div>
                 ` : ''}
+                <div class="nav-item" data-page="guide">
+                    <span class="nav-icon">📖</span>
+                    <span>${t('guide')}</span>
+                </div>
                 <div class="nav-section-title">${State.lang === 'en' ? 'Account' : 'Cuenta'}</div>
                 <div class="nav-item" data-page="settings">
                     <span class="nav-icon">⚙️</span>
@@ -708,6 +715,9 @@ async function renderPage() {
                 break;
             case 'settings':
                 await loadSettings(main);
+                break;
+            case 'guide':
+                await loadGuide(main);
                 break;
             default:
                 await loadDashboard(main);
@@ -4580,5 +4590,197 @@ window.submitResetPassword = async function(token) {
         btn.textContent = 'Guardar contraseña'; btn.disabled = false;
     }
 };
+
+// ── GUÍA ─────────────────────────────────────────────────────────────────────
+async function loadGuide(container) {
+    const isAdmin = State.user?.role === 'admin';
+    const isManager = State.user?.role === 'admin' || State.user?.role === 'manager';
+
+    const tabs = [
+        { id: 'vacaciones', icon: '🏖️', label: 'Vacaciones' },
+        { id: 'eventos',    icon: '🎯', label: 'Eventos & Clientes' },
+        ...(isManager ? [{ id: 'admin', icon: '⚙️', label: isAdmin ? 'Administración' : 'Gestión' }] : []),
+    ];
+
+    container.innerHTML = `
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">📖 Guía de uso</h1>
+            <p class="page-subtitle">Todo lo que necesitas saber para usar Control Vacances</p>
+        </div>
+    </div>
+
+    <!-- Primeros pasos -->
+    <div style="margin-bottom:32px;">
+        <h2 style="font-size:1rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Primeros Pasos</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+            ${quickCard('🏖️', 'Solicitar Vacaciones', 'Pide tus días libres en pocos clics', 'my-vacations')}
+            ${quickCard('🏢', 'Añadir un Cliente', 'Da de alta nuevos clientes en el sistema', 'clients-config')}
+            ${quickCard('🎯', 'Crear un Evento', 'Asocia un evento o proyecto a un cliente', 'events')}
+            ${isManager ? quickCard('👥', 'Gestionar Equipo', 'Aprueba solicitudes y consulta el equipo', 'requests') : ''}
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="guide-tabs" style="display:flex;gap:8px;margin-bottom:24px;border-bottom:2px solid var(--border);padding-bottom:0;">
+        ${tabs.map((tab, i) => `
+        <button class="guide-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${tab.id}"
+            style="padding:10px 20px;border:none;background:none;cursor:pointer;font-weight:600;font-size:.9rem;
+                   color:${i === 0 ? 'var(--primary)' : 'var(--text-secondary)'};
+                   border-bottom:3px solid ${i === 0 ? 'var(--primary)' : 'transparent'};
+                   margin-bottom:-2px;transition:all .2s;">
+            ${tab.icon} ${tab.label}
+        </button>`).join('')}
+    </div>
+
+    <!-- Tab content -->
+    <div id="guideTabContent">
+        ${renderGuideTab('vacaciones', isAdmin, isManager)}
+    </div>`;
+
+    // Tab switching
+    container.querySelectorAll('.guide-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            container.querySelectorAll('.guide-tab-btn').forEach(b => {
+                b.style.color = 'var(--text-secondary)';
+                b.style.borderBottomColor = 'transparent';
+                b.classList.remove('active');
+            });
+            btn.style.color = 'var(--primary)';
+            btn.style.borderBottomColor = 'var(--primary)';
+            btn.classList.add('active');
+            document.getElementById('guideTabContent').innerHTML =
+                renderGuideTab(btn.dataset.tab, isAdmin, isManager);
+        });
+    });
+}
+
+function quickCard(icon, title, desc, page) {
+    return `<div onclick="navigateTo('${page}')"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;
+               cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:8px;"
+        onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)';this.style.borderColor='var(--primary)'"
+        onmouseout="this.style.boxShadow='none';this.style.borderColor='var(--border)'">
+        <div style="font-size:2rem;">${icon}</div>
+        <div style="font-weight:700;font-size:.95rem;color:var(--text-primary);">${title}</div>
+        <div style="font-size:.82rem;color:var(--text-secondary);">${desc}</div>
+        <div style="font-size:.8rem;color:var(--primary);font-weight:600;margin-top:4px;">Ir →</div>
+    </div>`;
+}
+
+function guideSection(title, steps) {
+    return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <h3 style="font-size:1rem;font-weight:700;margin:0 0 18px;color:var(--text-primary);">${title}</h3>
+        <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:14px;">
+            ${steps.map((s, i) => `
+            <li style="display:flex;gap:14px;align-items:flex-start;">
+                <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--primary);
+                             color:#fff;font-weight:700;font-size:.85rem;display:flex;align-items:center;
+                             justify-content:center;">${i + 1}</span>
+                <div>
+                    <div style="font-weight:600;font-size:.9rem;color:var(--text-primary);">${s.title}</div>
+                    <div style="font-size:.83rem;color:var(--text-secondary);margin-top:2px;">${s.desc}</div>
+                </div>
+            </li>`).join('')}
+        </ol>
+    </div>`;
+}
+
+function videoCard(label) {
+    return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;
+                display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:180px;">
+        <div style="width:56px;height:56px;background:var(--bg);border-radius:50%;display:flex;align-items:center;
+                    justify-content:center;font-size:1.6rem;">▶️</div>
+        <div style="font-weight:600;font-size:.9rem;color:var(--text-primary);text-align:center;">${label}</div>
+        <span style="background:var(--warning-light,#FFF3CD);color:#856404;font-size:.75rem;
+                     font-weight:600;padding:3px 10px;border-radius:20px;">Pendiente</span>
+    </div>`;
+}
+
+function renderGuideTab(tabId, isAdmin, isManager) {
+    if (tabId === 'vacaciones') {
+        return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
+            ${guideSection('🏖️ Cómo solicitar vacaciones', [
+                { title: 'Ve a "Mis Vacaciones"', desc: 'En el menú lateral, haz clic en "Mis Vacaciones".' },
+                { title: 'Pulsa "+ Nueva Solicitud"', desc: 'Aparecerá el formulario para elegir fechas.' },
+                { title: 'Selecciona las fechas', desc: 'Elige la fecha de inicio y fin. Se calculan automáticamente los días laborables.' },
+                { title: 'Añade un motivo (opcional)', desc: 'Puedes añadir una nota o justificación para tu responsable.' },
+                { title: 'Envía la solicitud', desc: 'Tu responsable recibirá la solicitud y la aprobará o rechazará.' },
+            ])}
+            ${guideSection('📅 Cómo consultar el calendario', [
+                { title: 'Accede al Calendario', desc: 'Desde el menú lateral, pulsa "Calendario".' },
+                { title: 'Filtra por equipo o departamento', desc: 'Usa los filtros superiores para ver solo a ciertos empleados.' },
+                { title: 'Consulta los festivos', desc: 'Los festivos oficiales aparecen marcados en rojo en el calendario.' },
+                { title: 'Navega por meses', desc: 'Usa las flechas para moverte entre meses y planificar con antelación.' },
+            ])}
+            ${guideSection('⭐ Cómo usar los Días Extras', [
+                { title: '¿Qué son los días extras?', desc: 'Son días adicionales concedidos por trabajar fines de semana u otros motivos.' },
+                { title: 'Consulta tu saldo', desc: 'En el Dashboard verás tu total de días disponibles (normales + extras ⭐).' },
+                { title: 'Se usan automáticamente', desc: 'Al solicitar vacaciones, los días extras se consumen una vez agotados los normales.' },
+                { title: 'Historial en "Dies Extres"', desc: 'Los administradores pueden ver el detalle de cada entrada en la sección de administración.' },
+            ])}
+            ${videoCard('Tutorial: Solicitar vacaciones')}
+        </div>`;
+    }
+    if (tabId === 'eventos') {
+        return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
+            ${guideSection('🏢 Cómo dar de alta un cliente', [
+                { title: 'Ve a "Clientes"', desc: 'En la sección Eventos del menú lateral, pulsa "Clientes".' },
+                { title: 'Pulsa "+ Nuevo Cliente"', desc: 'Se abrirá el formulario de alta de cliente.' },
+                { title: 'Rellena los datos', desc: 'Nombre, persona de contacto, email, teléfono y sector.' },
+                { title: 'Sube el logo (opcional)', desc: 'Haz clic en el icono de imagen para subir el logotipo del cliente.' },
+                { title: 'Guarda el cliente', desc: 'El cliente quedará disponible para asociarle eventos.' },
+            ])}
+            ${guideSection('🎯 Cómo crear un evento', [
+                { title: 'Accede a "Dashboard Eventos"', desc: 'Desde el menú lateral en la sección Eventos.' },
+                { title: 'Pulsa "+ Nuevo Evento"', desc: 'Se abrirá el formulario de creación.' },
+                { title: 'Selecciona el cliente', desc: 'Elige el cliente al que está asociado el evento.' },
+                { title: 'Define fechas y descripción', desc: 'Añade nombre del evento, fechas de inicio y fin, y una descripción.' },
+                { title: 'Asigna el equipo', desc: 'Selecciona los empleados que participarán en el evento.' },
+                { title: 'Guarda el evento', desc: 'Aparecerá en el Dashboard y en el Calendario de Eventos.' },
+            ])}
+            ${guideSection('✏️ Cómo editar o eliminar un evento', [
+                { title: 'Localiza el evento', desc: 'En el Dashboard Eventos o en el detalle del cliente.' },
+                { title: 'Pulsa el botón ✏️ (editar)', desc: 'Se abrirá el formulario con los datos actuales para modificarlos.' },
+                { title: 'Guarda los cambios', desc: 'Los cambios se reflejarán inmediatamente en todos los calendarios.' },
+                { title: 'O pulsa 🗑️ para eliminar', desc: 'Se pedirá confirmación antes de eliminar el evento definitivamente.' },
+            ])}
+            ${videoCard('Tutorial: Crear un evento')}
+        </div>`;
+    }
+    if (tabId === 'admin') {
+        return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
+            ${guideSection('✅ Cómo gestionar solicitudes', [
+                { title: 'Ve a "Solicitudes"', desc: 'En la sección Gestión del menú lateral.' },
+                { title: 'Revisa las solicitudes pendientes', desc: 'Las marcadas en amarillo están esperando tu aprobación.' },
+                { title: 'Aprueba o rechaza', desc: 'Pulsa ✓ para aprobar o ✗ para rechazar. Puedes añadir un motivo de rechazo.' },
+                { title: 'Gestiona cancelaciones', desc: 'Si un empleado pide cancelar una vacación aprobada, también recibirás la solicitud aquí.' },
+            ])}
+            ${isAdmin ? guideSection('👤 Cómo dar de alta un empleado', [
+                { title: 'Ve a "Empleados"', desc: 'En la sección Administración del menú lateral.' },
+                { title: 'Pulsa "+ Nuevo Empleado"', desc: 'Se abrirá el formulario de registro.' },
+                { title: 'Rellena los datos', desc: 'Nombre, apellido, email, contraseña, rol y departamento.' },
+                { title: 'Asigna días de vacaciones', desc: 'Define el total de días anuales asignados al empleado.' },
+                { title: 'Guarda el empleado', desc: 'Recibirá un email con sus credenciales de acceso.' },
+            ]) : ''}
+            ${isAdmin ? guideSection('⭐ Cómo añadir días extras a un empleado', [
+                { title: 'Ve a "Días Extras"', desc: 'En la sección Administración del menú lateral.' },
+                { title: 'Pulsa "+ Añadir Días Extras"', desc: 'Se abrirá el formulario de asignación.' },
+                { title: 'Selecciona el empleado', desc: 'Elige el empleado al que quieres añadir días.' },
+                { title: 'Indica los días y el motivo', desc: 'Especifica cuántos días y por qué (ej: trabajo fin de semana).' },
+                { title: 'Guarda la entrada', desc: 'Los días se suman al saldo disponible del empleado de inmediato.' },
+            ]) : ''}
+            ${isAdmin ? guideSection('🎉 Cómo gestionar festivos', [
+                { title: 'Ve a "Festivos"', desc: 'En la sección Administración.' },
+                { title: 'Añade festivos locales', desc: 'Puedes añadir los festivos de tu comunidad o ciudad.' },
+                { title: 'Los festivos no cuentan como vacaciones', desc: 'Al solicitar un período, los festivos se excluyen automáticamente del conteo.' },
+            ]) : ''}
+            ${videoCard('Tutorial: Gestión de solicitudes')}
+        </div>`;
+    }
+    return '';
+}
 
 document.addEventListener('DOMContentLoaded', init);
