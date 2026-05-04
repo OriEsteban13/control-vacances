@@ -63,6 +63,7 @@ const _tr = {
         profile_updated: 'Perfil actualizado', password_updated: 'Contraseña actualizada',
         name_required: 'El nombre es obligatorio', save_changes: 'Guardar Cambios',
         lang_changed: 'Idioma cambiado a Castellano',
+        extra_days: 'Días Extras', extra_days_balance: 'Días Extras Disponibles',
     },
     en: {
         dashboard: 'Dashboard', calendar: 'Calendar', my_vacations: 'My Vacations',
@@ -86,6 +87,7 @@ const _tr = {
         profile_updated: 'Profile updated', password_updated: 'Password updated',
         name_required: 'Name is required', save_changes: 'Save Changes',
         lang_changed: 'Language changed to English',
+        extra_days: 'Extra Days', extra_days_balance: 'Extra Days Available',
     },
     ca: {
         dashboard: 'Tauler', calendar: 'Calendari', my_vacations: 'Les meves vacances',
@@ -109,6 +111,7 @@ const _tr = {
         profile_updated: 'Perfil actualitzat', password_updated: 'Contrasenya actualitzada',
         name_required: 'El nom és obligatori', save_changes: 'Desar Canvis',
         lang_changed: "Idioma canviat a Català",
+        extra_days: 'Dies Extres', extra_days_balance: 'Dies Extres Disponibles',
     },
 };
 
@@ -599,6 +602,10 @@ function renderLayout() {
                     <span class="nav-icon">🏢</span>
                     <span>${t('departments')}</span>
                 </div>
+                <div class="nav-item" data-page="extra-days">
+                    <span class="nav-icon">⭐</span>
+                    <span>${t('extra_days')}</span>
+                </div>
                 ` : ''}
                 <div class="nav-section-title">${State.lang === 'en' ? 'Account' : 'Cuenta'}</div>
                 <div class="nav-item" data-page="settings">
@@ -692,6 +699,9 @@ async function renderPage() {
                 break;
             case 'clients-config':
                 await loadClientsConfig(main);
+                break;
+            case 'extra-days':
+                await loadExtraDays(main);
                 break;
             case 'delegations':
                 await loadDelegations(main);
@@ -1224,7 +1234,17 @@ async function loadMyVacations(container) {
                 <div class="stat-value">${State.user.days_pending}</div>
                 <div class="stat-label">Días Pendientes</div>
             </div>
+            ${State.user.extra_days > 0 ? `
+            <div class="stat-card accent">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-value">${State.user.extra_days}</div>
+                <div class="stat-label">${t('extra_days_balance')}</div>
+            </div>` : ''}
         </div>
+        ${State.user.extra_days > 0 ? `
+        <div style="margin-bottom:var(--space-lg);padding:12px 16px;border-radius:var(--radius-md);background:rgba(108,92,231,0.12);border:1px solid rgba(108,92,231,0.25);font-size:0.85rem;">
+            ⭐ Tienes <strong>${State.user.extra_days} días extras generados</strong> por trabajo en fines de semana. Se usarán automáticamente cuando hayas agotado los días normales.
+        </div>` : ''}
 
         <div class="panel">
             <div class="panel-header">
@@ -2145,6 +2165,185 @@ window.deleteLateArrival = async function(id) {
 };
 
 // ─────────────────────────────────────────────
+// Extra Days Page (Admin)
+// ─────────────────────────────────────────────
+
+async function loadExtraDays(container) {
+    const [entries, users] = await Promise.all([
+        api('/api/extra-days'),
+        api('/api/users'),
+    ]);
+
+    // Build per-user summary
+    const byUser = {};
+    for (const u of users) {
+        byUser[u.id] = { ...u, entries: [], total: u.extra_days || 0 };
+    }
+    for (const e of entries) {
+        if (byUser[e.user_id]) byUser[e.user_id].entries.push(e);
+    }
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header">
+            <div class="page-header-actions">
+                <div>
+                    <h1>⭐ ${t('extra_days')}</h1>
+                    <p>Días generados por trabajo en fines de semana</p>
+                </div>
+                <button class="btn btn-primary" onclick="openAddExtraDaysModal()">＋ Añadir días extras</button>
+            </div>
+        </div>
+
+        <!-- Summary by employee -->
+        <div class="panel" style="margin-bottom:var(--space-lg);">
+            <div class="panel-header"><h2>👤 Balance por empleado</h2></div>
+            <div class="panel-body no-padding">
+                <table class="data-table">
+                    <thead><tr>
+                        <th>Empleado</th>
+                        <th>Departamento</th>
+                        <th style="text-align:center;">Días normales disp.</th>
+                        <th style="text-align:center;">Días extras generados</th>
+                        <th style="text-align:center;">Total disponible</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>
+                        ${users.map(u => {
+                            const extraTotal = u.extra_days || 0;
+                            const normalRem = u.days_remaining;
+                            const totalAvail = normalRem + extraTotal;
+                            return `<tr>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:8px;">
+                                        ${renderAvatarEl(u.avatar_color, u.initials, u.avatar_image, 32)}
+                                        <span style="font-weight:600;">${esc(u.full_name)}</span>
+                                    </div>
+                                </td>
+                                <td style="color:var(--text-muted);">${esc(u.department)}</td>
+                                <td style="text-align:center;font-weight:600;color:${normalRem > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${normalRem}</td>
+                                <td style="text-align:center;">
+                                    <span style="font-weight:700;color:var(--accent-secondary);font-size:1.1rem;">${extraTotal}</span>
+                                    ${extraTotal > 0 ? `<span style="font-size:0.72rem;color:var(--text-muted);display:block;">⭐ extras</span>` : ''}
+                                </td>
+                                <td style="text-align:center;font-weight:700;font-size:1.05rem;color:${totalAvail > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${totalAvail}</td>
+                                <td style="text-align:right;">
+                                    <button class="btn btn-secondary btn-sm" onclick="openAddExtraDaysModal(${u.id})">＋ Añadir</button>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Full history -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>📋 Historial de días extras</h2>
+                <span style="font-size:0.8rem;color:var(--text-muted);">${entries.length} registro(s)</span>
+            </div>
+            <div class="panel-body no-padding">
+            ${entries.length === 0
+                ? '<div class="empty-state" style="padding:32px;"><div class="empty-icon">⭐</div><h3>Sin días extras registrados</h3><p>Usa el botón "Añadir días extras" para registrar trabajo en fines de semana.</p></div>'
+                : `<table class="data-table">
+                    <thead><tr>
+                        <th>Empleado</th>
+                        <th>Días</th>
+                        <th>Descripción / Motivo</th>
+                        <th>Fecha trabajada</th>
+                        <th>Registrado por</th>
+                        <th>Fecha registro</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>
+                        ${entries.map(e => `<tr>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    ${renderAvatarEl(e.employee_avatar_color, e.employee_initials, e.employee_avatar_image, 28)}
+                                    <span style="font-weight:600;">${esc(e.employee_name)}</span>
+                                </div>
+                            </td>
+                            <td><span style="font-weight:700;font-size:1.1rem;color:var(--accent-secondary);">+${e.days}</span></td>
+                            <td>${esc(e.reason)}</td>
+                            <td>${e.work_date ? formatDate(e.work_date) : '<span style="color:var(--text-muted);">—</span>'}</td>
+                            <td style="color:var(--text-muted);font-size:0.82rem;">${esc(e.created_by_name || '—')}</td>
+                            <td style="color:var(--text-muted);font-size:0.82rem;">${e.created_at ? formatDate(e.created_at.split('T')[0]) : '—'}</td>
+                            <td>
+                                <button class="btn btn-danger btn-sm" onclick="deleteExtraDaysEntry(${e.id})" title="Eliminar">🗑️</button>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`}
+            </div>
+        </div>
+    </div>`;
+}
+
+window.openAddExtraDaysModal = async function(preselectedUserId = null) {
+    const users = await api('/api/users');
+    openModal(`
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3>⭐ Añadir Días Extras</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Empleado *</label>
+                <select class="form-select" id="edUser">
+                    <option value="">— Seleccionar empleado —</option>
+                    ${users.map(u => `<option value="${u.id}" ${preselectedUserId === u.id ? 'selected' : ''}>${esc(u.full_name)} (${esc(u.department)})</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:1;">
+                    <label>Días a añadir *</label>
+                    <input type="number" class="form-input" id="edDays" value="1" min="1" max="30">
+                </div>
+                <div class="form-group" style="flex:2;">
+                    <label>Fecha trabajada</label>
+                    <input type="date" class="form-input" id="edWorkDate">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Descripción / Motivo *</label>
+                <input type="text" class="form-input" id="edReason" placeholder="Ej: Trabajo fin de semana — montaje BigSound 3-4 mayo 2026">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitAddExtraDays()">Añadir días</button>
+        </div>
+    </div>`);
+};
+
+window.submitAddExtraDays = async function() {
+    const user_id = parseInt(document.getElementById('edUser').value);
+    const days = parseInt(document.getElementById('edDays').value);
+    const work_date = document.getElementById('edWorkDate').value || null;
+    const reason = document.getElementById('edReason').value.trim();
+    if (!user_id) { showToast('Selecciona un empleado', 'error'); return; }
+    if (!days || days < 1) { showToast('Los días deben ser al menos 1', 'error'); return; }
+    if (!reason) { showToast('La descripción es obligatoria', 'error'); return; }
+    try {
+        await api('/api/extra-days', { method: 'POST', body: JSON.stringify({ user_id, days, reason, work_date }) });
+        closeModal();
+        showToast(`+${days} días extras añadidos`, 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.deleteExtraDaysEntry = async function(id) {
+    if (!confirm('¿Eliminar este registro de días extras? Los días se descontarán del balance del empleado.')) return;
+    try {
+        await api(`/api/extra-days/${id}`, { method: 'DELETE' });
+        showToast('Registro eliminado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+// ─────────────────────────────────────────────
 // Delegations Page
 // ─────────────────────────────────────────────
 
@@ -2304,11 +2503,16 @@ function updateVacDayCounter() {
     if (!counter) return;
     if (!start || !end || end < start) { counter.innerHTML = ''; return; }
     const days = calcBusinessDays(start, end);
-    const remaining = State.user.days_remaining;
-    const after = remaining - days;
+    const normalRem = State.user.days_remaining;
+    const extraDays = State.user.extra_days || 0;
+    const totalAvail = normalRem + extraDays;
+    const after = totalAvail - days;
     const color = after < 0 ? 'var(--color-danger)' : after <= 2 ? 'var(--color-warning)' : 'var(--color-success)';
+    const extraNote = extraDays > 0 && days > normalRem
+        ? ` <span style="color:var(--accent-secondary);">(usará ${Math.min(extraDays, days - Math.max(0, normalRem))} ⭐ extras)</span>`
+        : '';
     counter.innerHTML = `<span style="background:rgba(255,255,255,0.06);border-radius:8px;padding:8px 12px;display:block;font-size:0.85rem;">
-        <strong>${days}</strong> día(s) hábil(es) · Disponibles: <strong>${remaining}</strong> · Quedarían: <strong style="color:${color}">${after}</strong>
+        <strong>${days}</strong> día(s) hábil(es) · Disponibles: <strong>${normalRem}</strong> normal${extraDays > 0 ? ` + <strong>${extraDays}</strong> ⭐ extra` : ''} · Quedarían: <strong style="color:${color}">${after}</strong>${extraNote}
     </span>`;
 }
 

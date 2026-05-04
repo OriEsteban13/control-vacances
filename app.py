@@ -186,6 +186,9 @@ class User(UserMixin, db.Model):
             return calculate_prorated_days(self.total_days, self.hire_date, year)
         return self.total_days
 
+    def extra_days_total(self):
+        return sum(e.days for e in ExtraDaysEntry.query.filter_by(user_id=self.id).all())
+
     def days_remaining(self, year=None):
         return self.get_allocation(year) - self.days_used(year)
 
@@ -214,6 +217,7 @@ class User(UserMixin, db.Model):
             'days_used': self.days_used(),
             'days_pending': self.days_pending(),
             'days_remaining': self.days_remaining(),
+            'extra_days': self.extra_days_total(),
             'avatar_color': self.avatar_color,
             'avatar_image': self.avatar_image,
             'must_change_password': self.must_change_password,
@@ -376,6 +380,34 @@ class VacationBalance(db.Model):
             'total_days': self.total_days,
             'carried_over': self.carried_over,
             'carryover_expiry': self.carryover_expiry.isoformat() if self.carryover_expiry else None,
+        }
+
+
+class ExtraDaysEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    days = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.String(300), nullable=False, default='')
+    work_date = db.Column(db.Date, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'employee_name': self.user.full_name if self.user else '—',
+            'employee_initials': self.user.initials if self.user else '?',
+            'employee_avatar_color': self.user.avatar_color if self.user else '#6C5CE7',
+            'employee_avatar_image': self.user.avatar_image if self.user else None,
+            'days': self.days,
+            'reason': self.reason,
+            'work_date': self.work_date.isoformat() if self.work_date else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_by_name': self.created_by.full_name if self.created_by else None,
         }
 
 
@@ -956,10 +988,12 @@ def create_vacation():
         reason=data.get('reason', ''),
     )
 
-    if vacation.business_days > current_user.days_remaining():
+    total_available = current_user.days_remaining() + current_user.extra_days_total()
+    if vacation.business_days > total_available:
         return jsonify({'success': False, 'error': (
             f'No tienes suficientes días disponibles. '
-            f'Disponibles: {current_user.days_remaining()}, Solicitados: {vacation.business_days}'
+            f'Disponibles: {total_available} ({current_user.days_remaining()} normales + {current_user.extra_days_total()} extras), '
+            f'Solicitados: {vacation.business_days}'
         )}), 400
 
     overlapping = VacationRequest.query.filter(
@@ -2250,6 +2284,72 @@ def send_reminders():
 
 
 # ─────────────────────────────────────────────
+# API Routes — Extra Days
+# ─────────────────────────────────────────────
+
+@app.route('/api/extra-days', methods=['GET'])
+@login_required
+def get_extra_days():
+    user_id = request.args.get('user_id', type=int)
+    if current_user.role == 'admin':
+        if user_id:
+            entries = ExtraDaysEntry.query.filter_by(user_id=user_id).order_by(ExtraDaysEntry.created_at.desc()).all()
+        else:
+            entries = ExtraDaysEntry.query.order_by(ExtraDaysEntry.created_at.desc()).all()
+    else:
+        entries = ExtraDaysEntry.query.filter_by(user_id=current_user.id).order_by(ExtraDaysEntry.created_at.desc()).all()
+    return jsonify([e.to_dict() for e in entries])
+
+
+@app.route('/api/extra-days', methods=['POST'])
+@login_required
+def create_extra_days():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    days = data.get('days')
+    reason = data.get('reason', '').strip()
+    if not user_id or not days or days < 1:
+        return jsonify({'success': False, 'error': 'user_id y días son obligatorios'}), 400
+    if not reason:
+        return jsonify({'success': False, 'error': 'La descripción es obligatoria'}), 400
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'Empleado no encontrado'}), 404
+    work_date = None
+    if data.get('work_date'):
+        try:
+            work_date = date_parser.parse(data['work_date']).date()
+        except (ValueError, TypeError):
+            pass
+    entry = ExtraDaysEntry(
+        user_id=user_id,
+        days=int(days),
+        reason=reason,
+        work_date=work_date,
+        created_by_id=current_user.id,
+    )
+    db.session.add(entry)
+    db.session.commit()
+    log_audit('create_extra_days', 'extra_days_entry', entry.id, f"user={user.username} days={days}")
+    return jsonify({'success': True, 'entry': entry.to_dict()})
+
+
+@app.route('/api/extra-days/<int:entry_id>', methods=['DELETE'])
+@login_required
+def delete_extra_days(entry_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    entry = db.session.get(ExtraDaysEntry, entry_id)
+    if not entry:
+        return jsonify({'success': False, 'error': 'Entrada no encontrada'}), 404
+    log_audit('delete_extra_days', 'extra_days_entry', entry_id, f"user_id={entry.user_id} days={entry.days}")
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
 # API Routes — Audit Log & Backup
 # ─────────────────────────────────────────────
 
