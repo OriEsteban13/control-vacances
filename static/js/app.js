@@ -1702,8 +1702,8 @@ async function loadEmployees(container) {
                                     <span style="font-weight:600;">${esc(u.full_name)}</span>
                                 </div>
                             </td>
-                            <td style="max-width:200px;">
-                                <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);" title="${esc(u.email)}">${esc(u.email)}</span>
+                            <td>
+                                <span style="display:block;overflow-wrap:break-word;word-break:break-all;color:var(--text-muted);" title="${esc(u.email)}">${esc(u.email)}</span>
                             </td>
                             <td>${esc(u.department)}</td>
                             <td><span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></td>
@@ -3603,14 +3603,16 @@ window.changeEventsCalMonth = function(delta) {
 
 async function loadClientsConfig(container) {
     const isAdmin = State.user.role === 'admin';
-    const [clients, allEvents] = await Promise.all([
+    const [clients, allEvents, allUsers] = await Promise.all([
         api('/api/clients'),
         api(`/api/events?year=${State.eventsYear}`),
+        api('/api/users'),
     ]);
     State.clients   = clients;
     State.events    = allEvents;
+    State.users     = allUsers;
     window._eventClients = clients;
-    window._eventUsers   = window._eventUsers || [];
+    window._eventUsers   = allUsers;
 
     // ── Client Detail View ──
     if (State.selectedClientId) {
@@ -3643,7 +3645,11 @@ async function loadClientsConfig(container) {
 
             <!-- Client header -->
             <div style="display:flex;align-items:center;gap:16px;margin-bottom:var(--space-xl);">
-                <div style="width:52px;height:52px;border-radius:var(--radius-md);background:${client.color};display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;">🏢</div>
+                <div style="width:56px;height:56px;border-radius:var(--radius-md);background:${client.color};display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;overflow:hidden;">
+                    ${client.logo_data
+                        ? `<img src="${client.logo_data}" style="width:100%;height:100%;object-fit:contain;" alt="${esc(client.name)}">`
+                        : '🏢'}
+                </div>
                 <div style="flex:1;">
                     <h1 style="margin:0;">${esc(client.name)}</h1>
                     <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
@@ -3725,13 +3731,17 @@ async function loadClientsConfig(container) {
                     <button class="btn btn-secondary btn-sm" onclick="exportClientEventsCSV(${client.id})">⬇ Exportar CSV</button>
                 </div>
                 <div class="panel-body no-padding"><table class="data-table">
-                    <thead><tr><th>Evento</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Responsable(s)</th></tr></thead>
+                    <thead><tr><th>Evento</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Responsable(s)</th>${isAdmin ? '<th></th>' : ''}</tr></thead>
                     <tbody>${upcoming.map(e => `
                         <tr>
-                            <td style="font-weight:600;">${esc(e.name)}</td>
+                            <td style="font-weight:600;">${esc(e.name)}${e.location ? `<div style="font-size:0.75rem;color:var(--text-muted);">📍 ${esc(e.location)}</div>` : ''}</td>
                             <td>${formatDate(e.start_date)}</td><td>${formatDate(e.end_date)}</td>
                             <td>${e.duration_days}</td>
                             <td>${(e.assignments||[]).map(a=>`<span title="${esc(a.employee_name)}">${renderAvatarEl(a.employee_avatar_color,a.employee_initials,a.employee_avatar_image,22)}</span>`).join(' ')} ${(e.assignments||[]).map(a=>esc(a.employee_name)).join(', ')}</td>
+                            ${isAdmin ? `<td style="white-space:nowrap;">
+                                <button class="btn btn-secondary btn-sm" onclick="openEditEventModal(${e.id})" title="Editar">✏️</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteEvent(${e.id})" title="Eliminar" style="margin-left:4px;">🗑️</button>
+                            </td>` : ''}
                         </tr>`).join('')}
                     </tbody>
                 </table></div>
@@ -3746,13 +3756,17 @@ async function loadClientsConfig(container) {
                 <div class="panel-body no-padding">
                 ${past.length === 0 ? '<div style="padding:var(--space-lg);text-align:center;color:var(--text-muted);">Sin eventos realizados aún</div>' :
                 `<table class="data-table">
-                    <thead><tr><th>Evento</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Responsable(s)</th></tr></thead>
+                    <thead><tr><th>Evento</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Responsable(s)</th>${isAdmin ? '<th></th>' : ''}</tr></thead>
                     <tbody>${past.map(e => `
                         <tr style="opacity:0.7;">
-                            <td style="font-weight:600;">${esc(e.name)}</td>
+                            <td style="font-weight:600;">${esc(e.name)}${e.location ? `<div style="font-size:0.75rem;color:var(--text-muted);">📍 ${esc(e.location)}</div>` : ''}</td>
                             <td>${formatDate(e.start_date)}</td><td>${formatDate(e.end_date)}</td>
                             <td>${e.duration_days}</td>
                             <td>${(e.assignments||[]).map(a=>esc(a.employee_name)).join(', ')}</td>
+                            ${isAdmin ? `<td style="white-space:nowrap;">
+                                <button class="btn btn-secondary btn-sm" onclick="openEditEventModal(${e.id})" title="Editar">✏️</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteEvent(${e.id})" title="Eliminar" style="margin-left:4px;">🗑️</button>
+                            </td>` : ''}
                         </tr>`).join('')}
                     </tbody>
                 </table>`}
@@ -3801,12 +3815,17 @@ async function loadClientsConfig(container) {
                 ${list.map(c => `
                 <div class="panel" style="margin:0;border-top:4px solid ${c.color};padding:0;cursor:pointer;transition:box-shadow 0.15s;" onclick="openClientDetail(${c.id})" onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.18)'" onmouseout="this.style.boxShadow=''">
                     <div style="padding:var(--space-md);">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                            <div>
-                                <div style="font-weight:700;font-size:0.95rem;margin-bottom:4px;">${esc(c.name)}</div>
-                                <div style="font-size:0.78rem;color:var(--text-muted);">${c.total_events} evento(s) · ${c.upcoming_events} próximos</div>
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                            <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                                <div style="width:38px;height:38px;border-radius:8px;background:${c.color};flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;overflow:hidden;">
+                                    ${c.logo_data ? `<img src="${c.logo_data}" style="width:100%;height:100%;object-fit:contain;" alt="">` : '🏢'}
+                                </div>
+                                <div style="min-width:0;">
+                                    <div style="font-weight:700;font-size:0.95rem;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(c.name)}</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);">${c.total_events} evento(s) · ${c.upcoming_events} próximos</div>
+                                </div>
                             </div>
-                            ${isAdmin ? `<div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
+                            ${isAdmin ? `<div style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
                                 <button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${c.id})" title="Editar">✏️</button>
                                 <button class="btn btn-danger btn-sm" onclick="deleteClient(${c.id})" title="Eliminar">🗑️</button>
                             </div>` : ''}
@@ -3830,6 +3849,10 @@ function clientFormHTML(c) {
     const typOpts = EVENT_TYPOLOGIES.map(t =>
         `<option value="${t}" ${c && c.typology === t ? 'selected' : ''}>${t}</option>`
     ).join('');
+    window._clientLogoData = c ? (c.logo_data || null) : null;
+    const logoPreview = c && c.logo_data
+        ? `<img src="${c.logo_data}" style="width:72px;height:72px;object-fit:contain;border-radius:8px;">`
+        : `<div style="width:72px;height:72px;border-radius:8px;background:${c ? c.color : '#6C5CE7'};display:flex;align-items:center;justify-content:center;font-size:1.8rem;">🏢</div>`;
     return `
         <div class="form-group">
             <label>Nombre del cliente *</label>
@@ -3846,10 +3869,35 @@ function clientFormHTML(c) {
             </div>
         </div>
         <div class="form-group">
+            <label>Logo del cliente</label>
+            <div style="display:flex;align-items:center;gap:14px;">
+                <div id="clLogoPreview" style="cursor:pointer;position:relative;" onclick="document.getElementById('clLogoInput').click()" title="Haz clic para cambiar el logo">
+                    ${logoPreview}
+                    <div style="position:absolute;inset:0;border-radius:8px;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#fff;opacity:0;transition:opacity 0.15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">📷 Cambiar</div>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('clLogoInput').click()">📷 Subir imagen</button>
+                    ${c && c.logo_data ? `<button type="button" class="btn btn-danger btn-sm" style="margin-left:6px;" onclick="window._clientLogoData=null;document.getElementById('clLogoPreview').innerHTML='<div style=\\'width:72px;height:72px;border-radius:8px;background:#6C5CE7;display:flex;align-items:center;justify-content:center;font-size:1.8rem;\\'>🏢</div>';">🗑️ Quitar</button>` : ''}
+                    <p style="font-size:0.75rem;color:var(--text-muted);margin:6px 0 0;">JPG, PNG o SVG · máx. 2 MB</p>
+                </div>
+                <input type="file" id="clLogoInput" accept="image/*" style="display:none" onchange="handleClientLogoChange(this)">
+            </div>
+        </div>
+        <div class="form-group">
             <label>Notas</label>
             <input type="text" class="form-input" id="clNotes" value="${c ? esc(c.notes) : ''}" placeholder="Información adicional...">
         </div>`;
 }
+
+window.handleClientLogoChange = async function(input) {
+    if (!input.files || !input.files[0]) return;
+    try {
+        const data = await resizeImage(input.files[0], 300);
+        window._clientLogoData = data;
+        document.getElementById('clLogoPreview').innerHTML =
+            `<img src="${data}" style="width:72px;height:72px;object-fit:contain;border-radius:8px;">`;
+    } catch (e) { showToast('Error al procesar la imagen', 'error'); }
+};
 
 window.openCreateClientModal = function() {
     openModal(`
@@ -3871,9 +3919,10 @@ window.submitCreateClient = async function() {
     const typology = document.getElementById('clTypology').value;
     const color = document.getElementById('clColor').value;
     const notes = document.getElementById('clNotes').value;
+    const logo_data = window._clientLogoData || null;
     if (!name) { showToast('El nombre es obligatorio', 'error'); return; }
     try {
-        await api('/api/clients', { method: 'POST', body: JSON.stringify({ name, typology, color, notes }) });
+        await api('/api/clients', { method: 'POST', body: JSON.stringify({ name, typology, color, notes, logo_data }) });
         closeModal();
         showToast('Cliente creado', 'success');
         renderPage();
@@ -3902,9 +3951,10 @@ window.submitEditClient = async function(id) {
     const typology = document.getElementById('clTypology').value;
     const color = document.getElementById('clColor').value;
     const notes = document.getElementById('clNotes').value;
+    const logo_data = window._clientLogoData !== undefined ? window._clientLogoData : null;
     if (!name) { showToast('El nombre es obligatorio', 'error'); return; }
     try {
-        await api(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify({ name, typology, color, notes }) });
+        await api(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify({ name, typology, color, notes, logo_data }) });
         closeModal();
         showToast('Cliente actualizado', 'success');
         renderPage();

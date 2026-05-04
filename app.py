@@ -441,6 +441,7 @@ class Client(db.Model):
     typology = db.Column(db.String(50), nullable=False, default='Otro')
     color = db.Column(db.String(7), default='#6C5CE7')
     notes = db.Column(db.Text, default='')
+    logo_data = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     events = db.relationship('Event', backref='client', lazy=True)
@@ -453,6 +454,7 @@ class Client(db.Model):
             'typology': self.typology,
             'color': self.color,
             'notes': self.notes,
+            'logo_data': self.logo_data,
             'total_events': len(self.events),
             'upcoming_events': upcoming,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -484,6 +486,7 @@ class Event(db.Model):
             'client_id': self.client_id,
             'client_name': self.client.name if self.client else None,
             'client_color': self.client.color if self.client else '#6C5CE7',
+            'client_logo': self.client.logo_data if self.client else None,
             'client_typology': self.client.typology if self.client else None,
             'start_date': self.start_date.isoformat(),
             'end_date': self.end_date.isoformat(),
@@ -1680,6 +1683,7 @@ def create_client():
         typology=data.get('typology', 'Otro'),
         color=data.get('color', '#6C5CE7'),
         notes=data.get('notes', ''),
+        logo_data=data.get('logo_data') or None,
     )
     db.session.add(client)
     db.session.commit()
@@ -1704,6 +1708,8 @@ def update_client(client_id):
         client.color = data['color']
     if 'notes' in data:
         client.notes = data['notes']
+    if 'logo_data' in data:
+        client.logo_data = data['logo_data'] or None
     db.session.commit()
     return jsonify({'success': True, 'client': client.to_dict()})
 
@@ -2312,6 +2318,22 @@ def internal_error(e):
 # Initialize DB
 # ─────────────────────────────────────────────
 
+def _run_migrations(db):
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    migrations = [
+        ('client', 'logo_data', 'TEXT'),
+    ]
+    with db.engine.connect() as conn:
+        for table, column, col_type in migrations:
+            if table in inspector.get_table_names():
+                existing = [c['name'] for c in inspector.get_columns(table)]
+                if column not in existing:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'))
+                    conn.commit()
+                    print(f"[migration] Added {table}.{column}")
+
+
 def init_db():
     with app.app_context():
         import traceback
@@ -2319,6 +2341,9 @@ def init_db():
             db.create_all()
             db_uri = app.config['SQLALCHEMY_DATABASE_URI']
             print(f"[init_db] DB: {db_uri[:40]}...")
+
+            # Inline migrations — add new columns if they don't exist
+            _run_migrations(db)
 
             admin_password = os.environ.get('ADMIN_PASSWORD', 'admin')
             admin = User.query.filter_by(username='admin').first()
