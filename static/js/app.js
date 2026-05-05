@@ -65,6 +65,22 @@ const _tr = {
         lang_changed: 'Idioma cambiado a Castellano',
         extra_days: 'Días Extras', extra_days_balance: 'Días Extras Disponibles',
         guide: 'Guía',
+        nav_events: 'Eventos', nav_events_dashboard: 'Dashboard Eventos', nav_events_calendar: 'Calendario Eventos', nav_clients: 'Clientes',
+        summary_for: 'Resumen de vacaciones para', sick_days_label: 'Días de Baja', total_requests_label: 'Total Solicitudes',
+        absent_today: 'Ausentes Hoy', persons_label: 'persona(s)', nobody_vacation: 'Nadie está de vacaciones hoy.',
+        until_date: 'hasta', on_sick_leave: 'De Baja', nobody_sick: 'Nadie está de baja actualmente.',
+        upcoming_absences: 'Próximas Ausencias', next_7_days: 'Próximos 7 días', no_absences_week: 'Sin ausencias previstas esta semana.',
+        vacations_by_month: 'Vacaciones por Mes', by_department: 'Por Departamento', no_dept_data: 'Sin datos de departamentos',
+        last_requests: 'Últimas Solicitudes', no_requests_empty: 'Sin solicitudes', no_vacations_msg: 'No hay solicitudes de vacaciones',
+        since_date: 'desde', my_vacations_subtitle: 'Gestiona tus solicitudes de vacaciones', my_requests: 'Mis Solicitudes',
+        first_request_hint: 'Crea tu primera solicitud de vacaciones',
+        extra_days_note: 'días extras generados', extra_days_auto: 'Se usarán automáticamente cuando hayas agotado los días normales.',
+        withdraw: 'Retirar', request_cancellation: 'Solicitar cancelación', cancel_in_review: 'Cancelación en revisión',
+        th_employee: 'Empleado', th_dates: 'Fechas', th_type: 'Tipo', th_days: 'Días', th_status: 'Estado', th_actions: 'Acciones', th_reason: 'Motivo',
+        requests_title: 'Solicitudes de Vacaciones', requests_subtitle: 'Revisa y gestiona las solicitudes del equipo',
+        bulk_approve_btn: 'Aprobar seleccionadas', export_csv: 'Exportar CSV',
+        filter_all: 'Todas', filter_pending_label: 'Pendientes', filter_approved_label: 'Aprobadas', filter_rejected_label: 'Rechazadas', filter_cancellations: 'Cancelaciones',
+        team_subtitle: 'Estado de vacaciones de tu equipo', used_label: 'Usados', available_label: 'Disponibles', pending_label: 'Pendientes',
     },
     en: {
         dashboard: 'Dashboard', calendar: 'Calendar', my_vacations: 'My Vacations',
@@ -90,6 +106,22 @@ const _tr = {
         lang_changed: 'Language changed to English',
         extra_days: 'Extra Days', extra_days_balance: 'Extra Days Available',
         guide: 'Guide',
+        nav_events: 'Events', nav_events_dashboard: 'Events Dashboard', nav_events_calendar: 'Events Calendar', nav_clients: 'Clients',
+        summary_for: 'Vacation summary for', sick_days_label: 'Sick Days', total_requests_label: 'Total Requests',
+        absent_today: 'Absent Today', persons_label: 'person(s)', nobody_vacation: 'Nobody is on vacation today.',
+        until_date: 'until', on_sick_leave: 'On Sick Leave', nobody_sick: 'Nobody is currently on sick leave.',
+        upcoming_absences: 'Upcoming Absences', next_7_days: 'Next 7 days', no_absences_week: 'No absences planned this week.',
+        vacations_by_month: 'Vacations by Month', by_department: 'By Department', no_dept_data: 'No department data',
+        last_requests: 'Latest Requests', no_requests_empty: 'No requests', no_vacations_msg: 'No vacation requests',
+        since_date: 'since', my_vacations_subtitle: 'Manage your vacation requests', my_requests: 'My Requests',
+        first_request_hint: 'Create your first vacation request',
+        extra_days_note: 'generated extra days', extra_days_auto: 'They will be used automatically once normal days are exhausted.',
+        withdraw: 'Withdraw', request_cancellation: 'Request cancellation', cancel_in_review: 'Cancellation under review',
+        th_employee: 'Employee', th_dates: 'Dates', th_type: 'Type', th_days: 'Days', th_status: 'Status', th_actions: 'Actions', th_reason: 'Reason',
+        requests_title: 'Vacation Requests', requests_subtitle: 'Review and manage team requests',
+        bulk_approve_btn: 'Approve selected', export_csv: 'Export CSV',
+        filter_all: 'All', filter_pending_label: 'Pending', filter_approved_label: 'Approved', filter_rejected_label: 'Rejected', filter_cancellations: 'Cancellations',
+        team_subtitle: "Your team's vacation status", used_label: 'Used', available_label: 'Available', pending_label: 'Pending',
     },
     ca: {
         dashboard: 'Tauler', calendar: 'Calendari', my_vacations: 'Les meves vacances',
@@ -115,6 +147,22 @@ const _tr = {
         lang_changed: "Idioma canviat a Català",
         extra_days: 'Dies Extres', extra_days_balance: 'Dies Extres Disponibles',
         guide: 'Guia',
+        nav_events: 'Esdeveniments', nav_events_dashboard: 'Tauler Esdeveniments', nav_events_calendar: 'Calendari Esdeveniments', nav_clients: 'Clients',
+        summary_for: 'Resum de vacances per a', sick_days_label: 'Dies de Baixa', total_requests_label: 'Total Sol·licituds',
+        absent_today: 'Absents Avui', persons_label: 'persona/es', nobody_vacation: 'Ningú és de vacances avui.',
+        until_date: 'fins', on_sick_leave: 'De Baixa', nobody_sick: 'Ningú és de baixa.',
+        upcoming_absences: 'Pròximes Absències', next_7_days: 'Pròxims 7 dies', no_absences_week: 'Sense absències previstes aquesta setmana.',
+        vacations_by_month: 'Vacances per Mes', by_department: 'Per Departament', no_dept_data: 'Sense dades de departaments',
+        last_requests: 'Últimes Sol·licituds', no_requests_empty: 'Sense sol·licituds', no_vacations_msg: 'No hi ha sol·licituds de vacances',
+        since_date: 'des de', my_vacations_subtitle: 'Gestiona les teves sol·licituds de vacances', my_requests: 'Les meves sol·licituds',
+        first_request_hint: 'Crea la teva primera sol·licitud de vacances',
+        extra_days_note: 'dies extres generats', extra_days_auto: "S'usaran automàticament quan hagis esgotat els dies normals.",
+        withdraw: 'Retirar', request_cancellation: "Sol·licitar cancel·lació", cancel_in_review: "Cancel·lació en revisió",
+        th_employee: 'Empleat', th_dates: 'Dates', th_type: 'Tipus', th_days: 'Dies', th_status: 'Estat', th_actions: 'Accions', th_reason: 'Motiu',
+        requests_title: "Sol·licituds de Vacances", requests_subtitle: "Revisa i gestiona les sol·licituds de l'equip",
+        bulk_approve_btn: 'Aprovar seleccionades', export_csv: 'Exportar CSV',
+        filter_all: 'Totes', filter_pending_label: 'Pendents', filter_approved_label: 'Aprovades', filter_rejected_label: 'Rebutjades', filter_cancellations: "Cancel·lacions",
+        team_subtitle: "Estat de vacances de l'equip", used_label: 'Usats', available_label: 'Disponibles', pending_label: 'Pendents',
     },
 };
 
@@ -539,7 +587,7 @@ function renderLayout() {
                 </div>
             </div>
             <nav class="sidebar-nav">
-                <div class="nav-section-title">${State.lang === 'en' ? 'Vacations' : 'Vacaciones'}</div>
+                <div class="nav-section-title">${t('my_vacations')}</div>
                 <div class="nav-item active" data-page="dashboard">
                     <span class="nav-icon">📊</span>
                     <span>${t('dashboard')}</span>
@@ -553,22 +601,22 @@ function renderLayout() {
                     <span>${t('my_vacations')}</span>
                 </div>
 
-                <div class="nav-section-title">Eventos</div>
+                <div class="nav-section-title">${t('nav_events')}</div>
                 <div class="nav-item" data-page="events">
                     <span class="nav-icon">🎯</span>
-                    <span>Dashboard Eventos</span>
+                    <span>${t('nav_events_dashboard')}</span>
                 </div>
                 <div class="nav-item" data-page="events-calendar">
                     <span class="nav-icon">📆</span>
-                    <span>Calendario Eventos</span>
+                    <span>${t('nav_events_calendar')}</span>
                 </div>
                 <div class="nav-item" data-page="clients-config">
                     <span class="nav-icon">🏢</span>
-                    <span>Clientes</span>
+                    <span>${t('nav_clients')}</span>
                 </div>
 
                 ${isManager ? `
-                <div class="nav-section-title">${State.lang === 'en' ? 'Management' : 'Gestión'}</div>
+                <div class="nav-section-title">${State.lang === 'en' ? 'Management' : State.lang === 'ca' ? 'Gestió' : 'Gestión'}</div>
                 <div class="nav-item" data-page="requests">
                     <span class="nav-icon">📋</span>
                     <span>${t('requests')}</span>
@@ -588,14 +636,14 @@ function renderLayout() {
                 </div>
                 ` : ''}
                 ${isAdmin ? `
-                <div class="nav-section-title">${State.lang === 'en' ? 'Administration' : 'Administración'}</div>
+                <div class="nav-section-title">${State.lang === 'en' ? 'Administration' : State.lang === 'ca' ? 'Administració' : 'Administración'}</div>
                 <div class="nav-item" data-page="employees">
                     <span class="nav-icon">⚙️</span>
                     <span>${t('employees')}</span>
                 </div>
                 <div class="nav-item" data-page="sick-leaves">
                     <span class="nav-icon">🏥</span>
-                    <span>${State.lang === 'en' ? 'Sick Leaves' : 'Bajas'}</span>
+                    <span>${State.lang === 'en' ? 'Sick Leaves' : State.lang === 'ca' ? 'Baixes' : 'Bajas'}</span>
                 </div>
                 <div class="nav-item" data-page="holidays">
                     <span class="nav-icon">🎉</span>
@@ -614,7 +662,7 @@ function renderLayout() {
                     <span class="nav-icon">📖</span>
                     <span>${t('guide')}</span>
                 </div>
-                <div class="nav-section-title">${State.lang === 'en' ? 'Account' : 'Cuenta'}</div>
+                <div class="nav-section-title">${State.lang === 'en' ? 'Account' : State.lang === 'ca' ? 'Compte' : 'Cuenta'}</div>
                 <div class="nav-item" data-page="settings">
                     <span class="nav-icon">⚙️</span>
                     <span>${t('settings')}</span>
@@ -767,15 +815,15 @@ async function loadDashboard(container) {
     container.innerHTML = `
     <div class="page-enter">
         <div class="page-header">
-            <h1>¡Hola, ${esc(u.first_name)}! 👋</h1>
-            <p>Resumen de vacaciones para ${stats.year}</p>
+            <h1>${t('hello')}, ${esc(u.first_name)}! 👋</h1>
+            <p>${t('summary_for')} ${stats.year}</p>
         </div>
 
         <div class="stats-grid">
             <div class="stat-card accent">
                 <div class="stat-icon">📊</div>
                 <div class="stat-value">${u.days_remaining + (u.extra_days || 0)}</div>
-                <div class="stat-label">Días Disponibles</div>
+                <div class="stat-label">${t('available_days')}</div>
                 <div class="progress-bar">
                     <div class="progress-fill ${pct > 80 ? 'high' : pct > 50 ? 'medium' : ''}"
                          style="width: ${pct}%"></div>
@@ -784,23 +832,23 @@ async function loadDashboard(container) {
             <div class="stat-card success">
                 <div class="stat-icon">✅</div>
                 <div class="stat-value">${u.days_used}</div>
-                <div class="stat-label">Días Usados</div>
+                <div class="stat-label">${t('used_days')}</div>
             </div>
             <div class="stat-card warning">
                 <div class="stat-icon">⏳</div>
                 <div class="stat-value">${u.days_pending}</div>
-                <div class="stat-label">Días Pendientes</div>
+                <div class="stat-label">${t('pending_days')}</div>
             </div>
             <div class="stat-card info">
                 <div class="stat-icon">📅</div>
                 <div class="stat-value">${allocDays}</div>
-                <div class="stat-label">Total Asignado</div>
+                <div class="stat-label">${t('total_assigned')}</div>
             </div>
             ${u.sick_days > 0 ? `
             <div class="stat-card danger">
                 <div class="stat-icon">🏥</div>
                 <div class="stat-value">${u.sick_days}</div>
-                <div class="stat-label">Días de Baja</div>
+                <div class="stat-label">${t('sick_days_label')}</div>
             </div>` : ''}
         </div>
 
@@ -809,22 +857,22 @@ async function loadDashboard(container) {
             <div class="stat-card accent">
                 <div class="stat-icon">📝</div>
                 <div class="stat-value">${stats.total_requests}</div>
-                <div class="stat-label">Total Solicitudes</div>
+                <div class="stat-label">${t('total_requests_label')}</div>
             </div>
             <div class="stat-card warning">
                 <div class="stat-icon">🔔</div>
                 <div class="stat-value">${stats.pending_requests}</div>
-                <div class="stat-label">Pendientes</div>
+                <div class="stat-label">${t('pending')}</div>
             </div>
             <div class="stat-card success">
                 <div class="stat-icon">✅</div>
                 <div class="stat-value">${stats.approved_requests}</div>
-                <div class="stat-label">Aprobadas</div>
+                <div class="stat-label">${t('approved')}</div>
             </div>
             <div class="stat-card danger">
                 <div class="stat-icon">❌</div>
                 <div class="stat-value">${stats.rejected_requests}</div>
-                <div class="stat-label">Rechazadas</div>
+                <div class="stat-label">${t('rejected')}</div>
             </div>
         </div>
         ` : ''}
@@ -832,18 +880,18 @@ async function loadDashboard(container) {
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-lg);">
             <div class="panel">
                 <div class="panel-header">
-                    <h2>🏖️ Ausentes Hoy</h2>
-                    <span style="font-size:0.8rem;color:var(--text-muted);">${vacToday.length} persona(s)</span>
+                    <h2>🏖️ ${t('absent_today')}</h2>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">${vacToday.length} ${t('persons_label')}</span>
                 </div>
                 <div class="panel-body">
                     ${vacToday.length === 0
-                        ? '<p style="color:var(--text-muted);font-size:0.85rem;">Nadie está de vacaciones hoy.</p>'
+                        ? `<p style="color:var(--text-muted);font-size:0.85rem;">${t('nobody_vacation')}</p>`
                         : vacToday.map(v => `
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
                                 ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
                                 <div>
                                     <div style="font-weight:600;font-size:0.85rem;">${esc(v.employee_name)}</div>
-                                    <div style="font-size:0.75rem;color:var(--text-muted);">hasta ${formatDate(v.end_date)}</div>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);">${t('until_date')} ${formatDate(v.end_date)}</div>
                                 </div>
                             </div>`).join('')
                     }
@@ -851,18 +899,18 @@ async function loadDashboard(container) {
             </div>
             <div class="panel">
                 <div class="panel-header">
-                    <h2>🏥 De Baja</h2>
-                    <span style="font-size:0.8rem;color:var(--text-muted);">${sickToday.length} persona(s)</span>
+                    <h2>🏥 ${t('on_sick_leave')}</h2>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">${sickToday.length} ${t('persons_label')}</span>
                 </div>
                 <div class="panel-body">
                     ${sickToday.length === 0
-                        ? '<p style="color:var(--text-muted);font-size:0.85rem;">Nadie está de baja actualmente.</p>'
+                        ? `<p style="color:var(--text-muted);font-size:0.85rem;">${t('nobody_sick')}</p>`
                         : sickToday.map(s => `
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
                                 ${renderAvatarEl(s.employee_avatar_color, s.employee_initials, s.employee_avatar_image, 32)}
                                 <div>
                                     <div style="font-weight:600;font-size:0.85rem;">${esc(s.employee_name)}</div>
-                                    <div style="font-size:0.75rem;color:var(--color-danger);">🏥 ${esc(s.leave_type)} · desde ${formatDate(s.start_date)}</div>
+                                    <div style="font-size:0.75rem;color:var(--color-danger);">🏥 ${esc(s.leave_type)} · ${t('since_date')} ${formatDate(s.start_date)}</div>
                                 </div>
                             </div>`).join('')
                     }
@@ -870,12 +918,12 @@ async function loadDashboard(container) {
             </div>
             <div class="panel">
                 <div class="panel-header">
-                    <h2>📅 Próximas Ausencias</h2>
-                    <span style="font-size:0.8rem;color:var(--text-muted);">Próximos 7 días</span>
+                    <h2>📅 ${t('upcoming_absences')}</h2>
+                    <span style="font-size:0.8rem;color:var(--text-muted);">${t('next_7_days')}</span>
                 </div>
                 <div class="panel-body">
                     ${absUpcoming.length === 0
-                        ? '<p style="color:var(--text-muted);font-size:0.85rem;">Sin ausencias previstas esta semana.</p>'
+                        ? `<p style="color:var(--text-muted);font-size:0.85rem;">${t('no_absences_week')}</p>`
                         : absUpcoming.map(v => `
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
                                 ${renderAvatarEl(v.employee_avatar_color, v.employee_initials, v.employee_avatar_image, 32)}
@@ -892,7 +940,7 @@ async function loadDashboard(container) {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg);">
             <div class="panel">
                 <div class="panel-header">
-                    <h2>📈 Vacaciones por Mes</h2>
+                    <h2>📈 ${t('vacations_by_month')}</h2>
                 </div>
                 <div class="panel-body">
                     <div class="bar-chart" id="monthlyChart">
@@ -903,7 +951,7 @@ async function loadDashboard(container) {
 
             <div class="panel">
                 <div class="panel-header">
-                    <h2>🏢 Por Departamento</h2>
+                    <h2>🏢 ${t('by_department')}</h2>
                 </div>
                 <div class="panel-body">
                     ${renderDepartmentStats(stats.departments)}
@@ -913,7 +961,7 @@ async function loadDashboard(container) {
 
         <div class="panel">
             <div class="panel-header">
-                <h2>📋 Últimas Solicitudes</h2>
+                <h2>📋 ${t('last_requests')}</h2>
             </div>
             <div class="panel-body no-padding">
                 ${renderVacationTable(vacations.slice(0, 5), false)}
@@ -925,7 +973,10 @@ async function loadDashboard(container) {
 }
 
 function renderMonthlyChart(monthly) {
-    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const _mo = { es: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],
+                  en: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+                  ca: ['Gen','Feb','Mar','Abr','Mai','Jun','Jul','Ago','Set','Oct','Nov','Des'] };
+    const months = _mo[State.lang] || _mo.es;
     const maxVal = Math.max(...Object.values(monthly), 1);
     
     return Object.entries(monthly).map(([m, count]) => `
@@ -949,7 +1000,7 @@ function animateBars() {
 
 function renderDepartmentStats(departments) {
     if (Object.keys(departments).length === 0) {
-        return '<div class="empty-state"><p>Sin datos de departamentos</p></div>';
+        return `<div class="empty-state"><p>${t('no_dept_data')}</p></div>`;
     }
     return Object.entries(departments).map(([name, data]) => {
         const pct = data.days_total > 0 ? Math.round((data.days_used / data.days_total) * 100) : 0;
@@ -970,7 +1021,7 @@ function renderDepartmentStats(departments) {
 
 function renderVacationTable(vacations, showActions = false) {
     if (vacations.length === 0) {
-        return '<div class="empty-state"><div class="empty-icon">📭</div><h3>Sin solicitudes</h3><p>No hay solicitudes de vacaciones</p></div>';
+        return `<div class="empty-state"><div class="empty-icon">📭</div><h3>${t('no_requests_empty')}</h3><p>${t('no_vacations_msg')}</p></div>`;
     }
 
     const isManager = State.user.role === 'admin' || State.user.role === 'manager';
@@ -979,13 +1030,13 @@ function renderVacationTable(vacations, showActions = false) {
     <table class="data-table">
         <thead>
             <tr>
-                ${showActions && isManager ? '<th style="width:36px;"><input type="checkbox" id="selectAllVac" onchange="toggleSelectAllVacations(this)" title="Seleccionar todas las pendientes"></th>' : ''}
-                <th>Empleado</th>
-                <th>Fechas</th>
-                <th>Tipo</th>
-                <th>Días</th>
-                <th>Estado</th>
-                ${showActions && isManager ? '<th>Acciones</th>' : ''}
+                ${showActions && isManager ? `<th style="width:36px;"><input type="checkbox" id="selectAllVac" onchange="toggleSelectAllVacations(this)"></th>` : ''}
+                <th>${t('th_employee')}</th>
+                <th>${t('th_dates')}</th>
+                <th>${t('th_type')}</th>
+                <th>${t('th_days')}</th>
+                <th>${t('th_status')}</th>
+                ${showActions && isManager ? `<th>${t('th_actions')}</th>` : ''}
             </tr>
         </thead>
         <tbody>
@@ -1221,10 +1272,10 @@ async function loadMyVacations(container) {
         <div class="page-header">
             <div class="page-header-actions">
                 <div>
-                    <h1>🏖️ Mis Vacaciones</h1>
-                    <p>Gestiona tus solicitudes de vacaciones</p>
+                    <h1>🏖️ ${t('my_vacations')}</h1>
+                    <p>${t('my_vacations_subtitle')}</p>
                 </div>
-                <button class="btn btn-primary" onclick="openNewVacationModal()">+ Nueva Solicitud</button>
+                <button class="btn btn-primary" onclick="openNewVacationModal()">+ ${t('new_request')}</button>
             </div>
         </div>
 
@@ -1232,17 +1283,17 @@ async function loadMyVacations(container) {
             <div class="stat-card success">
                 <div class="stat-icon">✅</div>
                 <div class="stat-value">${State.user.days_remaining}</div>
-                <div class="stat-label">Días Disponibles</div>
+                <div class="stat-label">${t('available_days')}</div>
             </div>
             <div class="stat-card info">
                 <div class="stat-icon">📅</div>
                 <div class="stat-value">${State.user.days_used}</div>
-                <div class="stat-label">Días Usados</div>
+                <div class="stat-label">${t('used_days')}</div>
             </div>
             <div class="stat-card warning">
                 <div class="stat-icon">⏳</div>
                 <div class="stat-value">${State.user.days_pending}</div>
-                <div class="stat-label">Días Pendientes</div>
+                <div class="stat-label">${t('pending_days')}</div>
             </div>
             ${State.user.extra_days > 0 ? `
             <div class="stat-card accent">
@@ -1253,16 +1304,16 @@ async function loadMyVacations(container) {
         </div>
         ${State.user.extra_days > 0 ? `
         <div style="margin-bottom:var(--space-lg);padding:12px 16px;border-radius:var(--radius-md);background:rgba(108,92,231,0.12);border:1px solid rgba(108,92,231,0.25);font-size:0.85rem;">
-            ⭐ Tienes <strong>${State.user.extra_days} días extras generados</strong> por trabajo en fines de semana. Se usarán automáticamente cuando hayas agotado los días normales.
+            ⭐ ${State.lang === 'en' ? 'You have' : State.lang === 'ca' ? 'Tens' : 'Tienes'} <strong>${State.user.extra_days} ${t('extra_days_note')}</strong> ${State.lang === 'en' ? 'for weekend work.' : State.lang === 'ca' ? 'per treball en caps de setmana.' : 'por trabajo en fines de semana.'} ${t('extra_days_auto')}
         </div>` : ''}
 
         <div class="panel">
             <div class="panel-header">
-                <h2>Mis Solicitudes</h2>
+                <h2>${t('my_requests')}</h2>
             </div>
             <div class="panel-body no-padding">
                 ${myVacations.length === 0 ? 
-                    '<div class="empty-state"><div class="empty-icon">🏖️</div><h3>Sin solicitudes</h3><p>Crea tu primera solicitud de vacaciones</p></div>' :
+                    `<div class="empty-state"><div class="empty-icon">🏖️</div><h3>${t('no_requests_empty')}</h3><p>${t('first_request_hint')}</p></div>` :
                     renderMyVacationsTable(myVacations)
                 }
             </div>
@@ -1275,12 +1326,12 @@ function renderMyVacationsTable(vacations) {
     <table class="data-table">
         <thead>
             <tr>
-                <th>Fechas</th>
-                <th>Tipo</th>
-                <th>Días</th>
-                <th>Motivo</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+                <th>${t('th_dates')}</th>
+                <th>${t('th_type')}</th>
+                <th>${t('th_days')}</th>
+                <th>${t('th_reason')}</th>
+                <th>${t('th_status')}</th>
+                <th>${t('th_actions')}</th>
             </tr>
         </thead>
         <tbody>
@@ -1293,11 +1344,11 @@ function renderMyVacationsTable(vacations) {
                 <td><span class="status-badge ${v.status}">${translateStatus(v.status)}</span></td>
                 <td>
                     ${v.status === 'pending'
-                        ? `<button class="btn btn-danger btn-sm" onclick="deleteVacation(${v.id})">Retirar</button>`
+                        ? `<button class="btn btn-danger btn-sm" onclick="deleteVacation(${v.id})">${t('withdraw')}</button>`
                         : v.status === 'approved'
-                        ? `<button class="btn btn-warning btn-sm" onclick="openRequestCancelModal(${v.id})">Solicitar cancelación</button>`
+                        ? `<button class="btn btn-warning btn-sm" onclick="openRequestCancelModal(${v.id})">${t('request_cancellation')}</button>`
                         : v.status === 'cancel_requested'
-                        ? `<span style="font-size:0.78rem;color:var(--text-muted);">Cancelación en revisión</span>`
+                        ? `<span style="font-size:0.78rem;color:var(--text-muted);">${t('cancel_in_review')}</span>`
                         : '—'}
                 </td>
             </tr>`).join('')}
@@ -1322,22 +1373,22 @@ async function loadRequests(container) {
         <div class="page-header">
             <div class="page-header-actions">
                 <div>
-                    <h1>📋 Solicitudes de Vacaciones</h1>
-                    <p>Revisa y gestiona las solicitudes del equipo</p>
+                    <h1>📋 ${t('requests_title')}</h1>
+                    <p>${t('requests_subtitle')}</p>
                 </div>
                 <div style="display:flex;gap:8px;">
-                    ${pendingCount > 0 ? `<button class="btn btn-success btn-sm" onclick="bulkApproveSelected()">✅ Aprobar seleccionadas</button>` : ''}
-                    <button class="btn btn-secondary" onclick="exportVacations()">📥 Exportar CSV</button>
+                    ${pendingCount > 0 ? `<button class="btn btn-success btn-sm" onclick="bulkApproveSelected()">✅ ${t('bulk_approve_btn')}</button>` : ''}
+                    <button class="btn btn-secondary" onclick="exportVacations()">📥 ${t('export_csv')}</button>
                 </div>
             </div>
         </div>
 
         <div class="filters-bar">
-            <span class="filter-chip ${State.filterStatus === 'all' ? 'active' : ''}" onclick="setFilter('all')">Todas (${vacations.length})</span>
-            <span class="filter-chip ${State.filterStatus === 'pending' ? 'active' : ''}" onclick="setFilter('pending')">Pendientes (${pendingCount})</span>
-            <span class="filter-chip ${State.filterStatus === 'approved' ? 'active' : ''}" onclick="setFilter('approved')">Aprobadas (${vacations.filter(v => v.status === 'approved').length})</span>
-            <span class="filter-chip ${State.filterStatus === 'rejected' ? 'active' : ''}" onclick="setFilter('rejected')">Rechazadas (${vacations.filter(v => v.status === 'rejected').length})</span>
-            ${cancelCount > 0 ? `<span class="filter-chip ${State.filterStatus === 'cancel_requested' ? 'active' : ''}" onclick="setFilter('cancel_requested')">Cancelaciones (${cancelCount})</span>` : ''}
+            <span class="filter-chip ${State.filterStatus === 'all' ? 'active' : ''}" onclick="setFilter('all')">${t('filter_all')} (${vacations.length})</span>
+            <span class="filter-chip ${State.filterStatus === 'pending' ? 'active' : ''}" onclick="setFilter('pending')">${t('filter_pending_label')} (${pendingCount})</span>
+            <span class="filter-chip ${State.filterStatus === 'approved' ? 'active' : ''}" onclick="setFilter('approved')">${t('filter_approved_label')} (${vacations.filter(v => v.status === 'approved').length})</span>
+            <span class="filter-chip ${State.filterStatus === 'rejected' ? 'active' : ''}" onclick="setFilter('rejected')">${t('filter_rejected_label')} (${vacations.filter(v => v.status === 'rejected').length})</span>
+            ${cancelCount > 0 ? `<span class="filter-chip ${State.filterStatus === 'cancel_requested' ? 'active' : ''}" onclick="setFilter('cancel_requested')">${t('filter_cancellations')} (${cancelCount})</span>` : ''}
         </div>
 
         <div class="panel">
@@ -1486,8 +1537,8 @@ async function loadTeam(container) {
     container.innerHTML = `
     <div class="page-enter">
         <div class="page-header">
-            <h1>👥 Equipo</h1>
-            <p>Estado de vacaciones de tu equipo</p>
+            <h1>👥 ${t('team')}</h1>
+            <p>${t('team_subtitle')}</p>
         </div>
 
         <div class="employee-grid">
@@ -1505,15 +1556,15 @@ async function loadTeam(container) {
                 <div class="employee-card-stats">
                     <div class="emp-stat">
                         <div class="emp-stat-value used">${u.days_used}</div>
-                        <div class="emp-stat-label">Usados</div>
+                        <div class="emp-stat-label">${t('used_label')}</div>
                     </div>
                     <div class="emp-stat">
                         <div class="emp-stat-value pending-val">${u.days_pending}</div>
-                        <div class="emp-stat-label">Pendientes</div>
+                        <div class="emp-stat-label">${t('pending_label')}</div>
                     </div>
                     <div class="emp-stat">
                         <div class="emp-stat-value remaining">${u.days_remaining + (u.extra_days || 0)}${u.extra_days > 0 ? `<span style="font-size:0.65rem;vertical-align:super;color:var(--accent-secondary);">⭐</span>` : ''}</div>
-                        <div class="emp-stat-label">Disponibles</div>
+                        <div class="emp-stat-label">${t('available_label')}</div>
                     </div>
                 </div>
                 <div class="progress-bar" style="margin-top: var(--space-md);">
@@ -3452,7 +3503,7 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
                         ? '<p style="color:var(--text-muted);">Sin eventos este año.</p>'
                         : Object.entries(byMonth).sort().map(([ym, evList]) => {
                             const [y2, m2] = ym.split('-');
-                            const months = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            const months = ['', ...Array.from({length:12},(_,i)=>getMonthName(i+1))];
                             return `<div style="margin-bottom:var(--space-lg);">
                                 <div style="font-weight:700;font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border-color);">${months[parseInt(m2)]} ${y2}</div>
                                 ${evList.map(e => {
@@ -3675,7 +3726,7 @@ async function loadEventsCalendar(container) {
 
     const filtered = applyEventsFilters(allEvents);
 
-    const MONTHS    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const MONTHS    = Array.from({length:12},(_,i)=>getMonthName(i+1));
     const today     = new Date();
     const todayStr  = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
@@ -4258,7 +4309,7 @@ window.exportEventsCalendarCSV = function() {
     const events  = applyEventsFilters(State.events || [])
                       .filter(e => e.start_date <= monthEnd && e.end_date >= monthStart)
                       .sort((a,b) => a.start_date.localeCompare(b.start_date));
-    const MONTHS  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const MONTHS  = Array.from({length:12},(_,i)=>getMonthName(i+1));
     const rows    = [['Evento','Cliente','Tipología','Inicio','Fin','Días','Ubicación','Responsables']];
     for (const e of events) {
         rows.push([
@@ -4592,36 +4643,284 @@ window.submitResetPassword = async function(token) {
 };
 
 // ── GUÍA ─────────────────────────────────────────────────────────────────────
+const _guideContent = {
+    es: {
+        title: 'Guía de uso', subtitle: 'Todo lo que necesitas saber para usar Control Vacances',
+        first_steps: 'Primeros Pasos', go: 'Ir →', pending: 'Pendiente',
+        qc: [
+            { icon:'🏖️', title:'Solicitar Vacaciones', desc:'Pide tus días libres en pocos clics', page:'my-vacations' },
+            { icon:'🏢', title:'Añadir un Cliente', desc:'Da de alta nuevos clientes en el sistema', page:'clients-config' },
+            { icon:'🎯', title:'Crear un Evento', desc:'Asocia un evento o proyecto a un cliente', page:'events' },
+            { icon:'👥', title:'Gestionar Equipo', desc:'Aprueba solicitudes y consulta el equipo', page:'requests', mgr:true },
+        ],
+        tabs: { vacaciones:'Vacaciones', eventos:'Eventos & Clientes', admin:'Administración', manager:'Gestión' },
+        vid_vac: 'Tutorial: Solicitar vacaciones', vid_evt: 'Tutorial: Crear un evento', vid_adm: 'Tutorial: Gestión de solicitudes',
+        vac: [
+            { title:'🏖️ Cómo solicitar vacaciones', steps:[
+                {t:'Ve a "Mis Vacaciones"', d:'En el menú lateral, haz clic en "Mis Vacaciones".'},
+                {t:'Pulsa "+ Nueva Solicitud"', d:'Aparecerá el formulario para elegir fechas.'},
+                {t:'Selecciona las fechas', d:'Elige la fecha de inicio y fin. Se calculan automáticamente los días laborables.'},
+                {t:'Añade un motivo (opcional)', d:'Puedes añadir una nota o justificación para tu responsable.'},
+                {t:'Envía la solicitud', d:'Tu responsable recibirá la solicitud y la aprobará o rechazará.'},
+            ]},
+            { title:'📅 Cómo consultar el calendario', steps:[
+                {t:'Accede al Calendario', d:'Desde el menú lateral, pulsa "Calendario".'},
+                {t:'Filtra por equipo o departamento', d:'Usa los filtros superiores para ver solo a ciertos empleados.'},
+                {t:'Consulta los festivos', d:'Los festivos oficiales aparecen marcados en rojo en el calendario.'},
+                {t:'Navega por meses', d:'Usa las flechas para moverte entre meses y planificar con antelación.'},
+            ]},
+            { title:'⭐ Cómo usar los Días Extras', steps:[
+                {t:'¿Qué son los días extras?', d:'Son días adicionales concedidos por trabajar fines de semana u otros motivos.'},
+                {t:'Consulta tu saldo', d:'En el Dashboard verás tu total de días disponibles (normales + extras ⭐).'},
+                {t:'Se usan automáticamente', d:'Al solicitar vacaciones, los días extras se consumen una vez agotados los normales.'},
+                {t:'Historial en "Días Extras"', d:'Los administradores pueden ver el detalle de cada entrada en administración.'},
+            ]},
+        ],
+        evt: [
+            { title:'🏢 Cómo dar de alta un cliente', steps:[
+                {t:'Ve a "Clientes"', d:'En la sección Eventos del menú lateral.'},
+                {t:'Pulsa "+ Nuevo Cliente"', d:'Se abrirá el formulario de alta de cliente.'},
+                {t:'Rellena los datos', d:'Nombre, persona de contacto, email, teléfono y sector.'},
+                {t:'Sube el logo (opcional)', d:'Haz clic en el icono de imagen para subir el logotipo del cliente.'},
+                {t:'Guarda el cliente', d:'El cliente quedará disponible para asociarle eventos.'},
+            ]},
+            { title:'🎯 Cómo crear un evento', steps:[
+                {t:'Accede a "Dashboard Eventos"', d:'Desde el menú lateral en la sección Eventos.'},
+                {t:'Pulsa "+ Nuevo Evento"', d:'Se abrirá el formulario de creación.'},
+                {t:'Selecciona el cliente', d:'Elige el cliente al que está asociado el evento.'},
+                {t:'Define fechas y descripción', d:'Añade nombre del evento, fechas de inicio y fin, y una descripción.'},
+                {t:'Asigna el equipo', d:'Selecciona los empleados que participarán en el evento.'},
+                {t:'Guarda el evento', d:'Aparecerá en el Dashboard y en el Calendario de Eventos.'},
+            ]},
+            { title:'✏️ Cómo editar o eliminar un evento', steps:[
+                {t:'Localiza el evento', d:'En el Dashboard Eventos o en el detalle del cliente.'},
+                {t:'Pulsa el botón ✏️ (editar)', d:'Se abrirá el formulario con los datos actuales para modificarlos.'},
+                {t:'Guarda los cambios', d:'Los cambios se reflejarán inmediatamente en todos los calendarios.'},
+                {t:'O pulsa 🗑️ para eliminar', d:'Se pedirá confirmación antes de eliminar el evento definitivamente.'},
+            ]},
+        ],
+        adm: [
+            { title:'✅ Cómo gestionar solicitudes', steps:[
+                {t:'Ve a "Solicitudes"', d:'En la sección Gestión del menú lateral.'},
+                {t:'Revisa las solicitudes pendientes', d:'Las marcadas en amarillo están esperando tu aprobación.'},
+                {t:'Aprueba o rechaza', d:'Pulsa ✓ para aprobar o ✗ para rechazar. Puedes añadir un motivo de rechazo.'},
+                {t:'Gestiona cancelaciones', d:'Si un empleado pide cancelar una vacación aprobada, recibirás la solicitud aquí.'},
+            ]},
+            { title:'👤 Cómo dar de alta un empleado', admin:true, steps:[
+                {t:'Ve a "Empleados"', d:'En la sección Administración del menú lateral.'},
+                {t:'Pulsa "+ Nuevo Empleado"', d:'Se abrirá el formulario de registro.'},
+                {t:'Rellena los datos', d:'Nombre, apellido, email, contraseña, rol y departamento.'},
+                {t:'Asigna días de vacaciones', d:'Define el total de días anuales asignados al empleado.'},
+                {t:'Guarda el empleado', d:'Recibirá un email con sus credenciales de acceso.'},
+            ]},
+            { title:'⭐ Cómo añadir días extras a un empleado', admin:true, steps:[
+                {t:'Ve a "Días Extras"', d:'En la sección Administración del menú lateral.'},
+                {t:'Pulsa "+ Añadir Días Extras"', d:'Se abrirá el formulario de asignación.'},
+                {t:'Selecciona el empleado', d:'Elige el empleado al que quieres añadir días.'},
+                {t:'Indica los días y el motivo', d:'Especifica cuántos días y por qué (ej: trabajo fin de semana).'},
+                {t:'Guarda la entrada', d:'Los días se suman al saldo disponible del empleado de inmediato.'},
+            ]},
+            { title:'🎉 Cómo gestionar festivos', admin:true, steps:[
+                {t:'Ve a "Festivos"', d:'En la sección Administración.'},
+                {t:'Añade festivos locales', d:'Puedes añadir los festivos de tu comunidad o ciudad.'},
+                {t:'Los festivos no cuentan como vacaciones', d:'Al solicitar un período, los festivos se excluyen automáticamente.'},
+            ]},
+        ],
+    },
+    en: {
+        title: 'User Guide', subtitle: 'Everything you need to know to use Control Vacances',
+        first_steps: 'Getting Started', go: 'Go →', pending: 'Pending',
+        qc: [
+            { icon:'🏖️', title:'Request Vacation', desc:'Request your days off in a few clicks', page:'my-vacations' },
+            { icon:'🏢', title:'Add a Client', desc:'Register new clients in the system', page:'clients-config' },
+            { icon:'🎯', title:'Create an Event', desc:'Associate an event or project to a client', page:'events' },
+            { icon:'👥', title:'Manage Team', desc:'Approve requests and view the team', page:'requests', mgr:true },
+        ],
+        tabs: { vacaciones:'Vacations', eventos:'Events & Clients', admin:'Administration', manager:'Management' },
+        vid_vac: 'Tutorial: Requesting vacation', vid_evt: 'Tutorial: Creating an event', vid_adm: 'Tutorial: Managing requests',
+        vac: [
+            { title:'🏖️ How to request vacation', steps:[
+                {t:'Go to "My Vacations"', d:'In the sidebar, click on "My Vacations".'},
+                {t:'Click "+ New Request"', d:'The form to choose dates will appear.'},
+                {t:'Select the dates', d:'Choose start and end date. Working days are calculated automatically.'},
+                {t:'Add a reason (optional)', d:'You can add a note or justification for your manager.'},
+                {t:'Submit the request', d:'Your manager will receive the request and approve or reject it.'},
+            ]},
+            { title:'📅 How to view the calendar', steps:[
+                {t:'Open the Calendar', d:'In the sidebar, click "Calendar".'},
+                {t:'Filter by team or department', d:'Use the top filters to show only certain employees.'},
+                {t:'Check public holidays', d:'Official holidays appear marked in red on the calendar.'},
+                {t:'Browse by month', d:'Use the arrows to navigate between months and plan ahead.'},
+            ]},
+            { title:'⭐ How to use Extra Days', steps:[
+                {t:'What are extra days?', d:'Additional days granted for working weekends or other reasons.'},
+                {t:'Check your balance', d:'The Dashboard shows your total available days (normal + extra ⭐).'},
+                {t:'Used automatically', d:'When requesting vacation, extra days are consumed once normal days run out.'},
+                {t:'History in "Extra Days"', d:'Administrators can view the detail of each entry in the admin section.'},
+            ]},
+        ],
+        evt: [
+            { title:'🏢 How to add a client', steps:[
+                {t:'Go to "Clients"', d:'In the Events section of the sidebar.'},
+                {t:'Click "+ New Client"', d:'The client registration form will open.'},
+                {t:'Fill in the details', d:'Name, contact person, email, phone and industry.'},
+                {t:'Upload a logo (optional)', d:'Click the image icon to upload the client logo.'},
+                {t:'Save the client', d:'The client will be available to associate events.'},
+            ]},
+            { title:'🎯 How to create an event', steps:[
+                {t:'Go to "Events Dashboard"', d:'From the sidebar under Events.'},
+                {t:'Click "+ New Event"', d:'The creation form will open.'},
+                {t:'Select the client', d:'Choose the client this event belongs to.'},
+                {t:'Set dates and description', d:'Add the event name, start/end dates, and a description.'},
+                {t:'Assign the team', d:'Select the employees who will participate in the event.'},
+                {t:'Save the event', d:'It will appear in the Dashboard and Events Calendar.'},
+            ]},
+            { title:'✏️ How to edit or delete an event', steps:[
+                {t:'Find the event', d:'In the Events Dashboard or in the client detail.'},
+                {t:'Click the ✏️ button (edit)', d:'The form will open with the current data to modify.'},
+                {t:'Save changes', d:'Changes will be reflected immediately in all calendars.'},
+                {t:'Or click 🗑️ to delete', d:'Confirmation will be requested before permanently deleting the event.'},
+            ]},
+        ],
+        adm: [
+            { title:'✅ How to manage requests', steps:[
+                {t:'Go to "Requests"', d:'In the Management section of the sidebar.'},
+                {t:'Review pending requests', d:'Those highlighted in yellow are awaiting your approval.'},
+                {t:'Approve or reject', d:'Click ✓ to approve or ✗ to reject. You can add a rejection reason.'},
+                {t:'Manage cancellations', d:'If an employee requests cancellation of an approved vacation, you will receive it here.'},
+            ]},
+            { title:'👤 How to register an employee', admin:true, steps:[
+                {t:'Go to "Employees"', d:'In the Administration section of the sidebar.'},
+                {t:'Click "+ New Employee"', d:'The registration form will open.'},
+                {t:'Fill in the details', d:'First name, last name, email, password, role and department.'},
+                {t:'Assign vacation days', d:'Set the total annual days assigned to the employee.'},
+                {t:'Save the employee', d:'They will receive an email with their login credentials.'},
+            ]},
+            { title:'⭐ How to add extra days to an employee', admin:true, steps:[
+                {t:'Go to "Extra Days"', d:'In the Administration section of the sidebar.'},
+                {t:'Click "+ Add Extra Days"', d:'The assignment form will open.'},
+                {t:'Select the employee', d:'Choose the employee to whom you want to add days.'},
+                {t:'Enter days and reason', d:'Specify how many days and why (e.g. weekend work).'},
+                {t:'Save the entry', d:'The days are added to the employee\'s available balance immediately.'},
+            ]},
+            { title:'🎉 How to manage public holidays', admin:true, steps:[
+                {t:'Go to "Public Holidays"', d:'In the Administration section.'},
+                {t:'Add local holidays', d:'You can add holidays for your region or city.'},
+                {t:'Holidays don\'t count as vacation', d:'When requesting a period, holidays are automatically excluded from the count.'},
+            ]},
+        ],
+    },
+    ca: {
+        title: 'Guia d\'ús', subtitle: 'Tot el que necessites saber per usar Control Vacances',
+        first_steps: 'Primers Passos', go: 'Anar →', pending: 'Pendent',
+        qc: [
+            { icon:'🏖️', title:'Sol·licitar Vacances', desc:'Demana els teus dies lliures en pocs clics', page:'my-vacations' },
+            { icon:'🏢', title:'Afegir un Client', desc:'Dona d\'alta nous clients al sistema', page:'clients-config' },
+            { icon:'🎯', title:'Crear un Esdeveniment', desc:'Associa un esdeveniment o projecte a un client', page:'events' },
+            { icon:'👥', title:'Gestionar Equip', desc:'Aprova sol·licituds i consulta l\'equip', page:'requests', mgr:true },
+        ],
+        tabs: { vacaciones:'Vacances', eventos:'Esdeveniments & Clients', admin:'Administració', manager:'Gestió' },
+        vid_vac: 'Tutorial: Sol·licitar vacances', vid_evt: 'Tutorial: Crear un esdeveniment', vid_adm: 'Tutorial: Gestionar sol·licituds',
+        vac: [
+            { title:'🏖️ Com sol·licitar vacances', steps:[
+                {t:'Ves a "Les meves vacances"', d:'Al menú lateral, fes clic a "Les meves vacances".'},
+                {t:'Prem "+ Nova sol·licitud"', d:'Apareixerà el formulari per triar dates.'},
+                {t:'Selecciona les dates', d:'Tria la data d\'inici i fi. Els dies laborables es calculen automàticament.'},
+                {t:'Afegeix un motiu (opcional)', d:'Pots afegir una nota o justificació per al teu responsable.'},
+                {t:'Envia la sol·licitud', d:'El teu responsable rebrà la sol·licitud i l\'aprovarà o rebutjarà.'},
+            ]},
+            { title:'📅 Com consultar el calendari', steps:[
+                {t:'Accedeix al Calendari', d:'Des del menú lateral, prem "Calendari".'},
+                {t:'Filtra per equip o departament', d:'Usa els filtres superiors per veure només certs empleats.'},
+                {t:'Consulta els festius', d:'Els festius oficials apareixen marcats en vermell al calendari.'},
+                {t:'Navega per mesos', d:'Usa les fletxes per moure\'t entre mesos i planificar amb antelació.'},
+            ]},
+            { title:'⭐ Com usar els Dies Extres', steps:[
+                {t:'Què són els dies extres?', d:'Són dies addicionals concedits per treballar caps de setmana o altres motius.'},
+                {t:'Consulta el teu saldo', d:'Al Dashboard veuràs el teu total de dies disponibles (normals + extres ⭐).'},
+                {t:'S\'usen automàticament', d:'En sol·licitar vacances, els dies extres s\'usen un cop esgotats els normals.'},
+                {t:'Historial a "Dies Extres"', d:'Els administradors poden veure el detall de cada entrada a administració.'},
+            ]},
+        ],
+        evt: [
+            { title:'🏢 Com donar d\'alta un client', steps:[
+                {t:'Ves a "Clients"', d:'A la secció Esdeveniments del menú lateral.'},
+                {t:'Prem "+ Nou Client"', d:'S\'obrirà el formulari d\'alta de client.'},
+                {t:'Emplena les dades', d:'Nom, persona de contacte, email, telèfon i sector.'},
+                {t:'Puja el logo (opcional)', d:'Fes clic a la icona d\'imatge per pujar el logotip del client.'},
+                {t:'Desa el client', d:'El client estarà disponible per associar-li esdeveniments.'},
+            ]},
+            { title:'🎯 Com crear un esdeveniment', steps:[
+                {t:'Accedeix a "Tauler Esdeveniments"', d:'Des del menú lateral a la secció Esdeveniments.'},
+                {t:'Prem "+ Nou Esdeveniment"', d:'S\'obrirà el formulari de creació.'},
+                {t:'Selecciona el client', d:'Tria el client al qual pertany l\'esdeveniment.'},
+                {t:'Defineix dates i descripció', d:'Afegeix el nom, dates d\'inici i fi, i una descripció.'},
+                {t:'Assigna l\'equip', d:'Selecciona els empleats que participaran en l\'esdeveniment.'},
+                {t:'Desa l\'esdeveniment', d:'Apareixerà al Tauler i al Calendari d\'Esdeveniments.'},
+            ]},
+            { title:'✏️ Com editar o eliminar un esdeveniment', steps:[
+                {t:'Localitza l\'esdeveniment', d:'Al Tauler Esdeveniments o al detall del client.'},
+                {t:'Prem el botó ✏️ (editar)', d:'S\'obrirà el formulari amb les dades actuals per modificar.'},
+                {t:'Desa els canvis', d:'Els canvis es reflectiran immediatament a tots els calendaris.'},
+                {t:'O prem 🗑️ per eliminar', d:'Es demanarà confirmació abans d\'eliminar l\'esdeveniment.'},
+            ]},
+        ],
+        adm: [
+            { title:'✅ Com gestionar sol·licituds', steps:[
+                {t:'Ves a "Sol·licituds"', d:'A la secció Gestió del menú lateral.'},
+                {t:'Revisa les sol·licituds pendents', d:'Les marcades en groc estan esperant la teva aprovació.'},
+                {t:'Aprova o rebutja', d:'Prem ✓ per aprovar o ✗ per rebutjar. Pots afegir un motiu de rebuig.'},
+                {t:'Gestiona cancel·lacions', d:'Si un empleat demana cancel·lar unes vacances aprovades, ho rebràs aquí.'},
+            ]},
+            { title:'👤 Com donar d\'alta un empleat', admin:true, steps:[
+                {t:'Ves a "Empleats"', d:'A la secció Administració del menú lateral.'},
+                {t:'Prem "+ Nou Empleat"', d:'S\'obrirà el formulari de registre.'},
+                {t:'Emplena les dades', d:'Nom, cognoms, email, contrasenya, rol i departament.'},
+                {t:'Assigna dies de vacances', d:'Defineix el total de dies anuals assignats a l\'empleat.'},
+                {t:'Desa l\'empleat', d:'Rebrà un email amb les seves credencials d\'accés.'},
+            ]},
+            { title:'⭐ Com afegir dies extres a un empleat', admin:true, steps:[
+                {t:'Ves a "Dies Extres"', d:'A la secció Administració del menú lateral.'},
+                {t:'Prem "+ Afegir Dies Extres"', d:'S\'obrirà el formulari d\'assignació.'},
+                {t:'Selecciona l\'empleat', d:'Tria l\'empleat al qual vols afegir dies.'},
+                {t:'Indica els dies i el motiu', d:'Especifica quants dies i per què (ex: treball cap de setmana).'},
+                {t:'Desa l\'entrada', d:'Els dies se sumen al saldo disponible de l\'empleat immediatament.'},
+            ]},
+            { title:'🎉 Com gestionar festius', admin:true, steps:[
+                {t:'Ves a "Festius"', d:'A la secció Administració.'},
+                {t:'Afegeix festius locals', d:'Pots afegir els festius de la teva comunitat o ciutat.'},
+                {t:'Els festius no compten com a vacances', d:'En sol·licitar un període, els festius s\'exclouen automàticament.'},
+            ]},
+        ],
+    },
+};
+
 async function loadGuide(container) {
     const isAdmin = State.user?.role === 'admin';
     const isManager = State.user?.role === 'admin' || State.user?.role === 'manager';
+    const gc = _guideContent[State.lang] || _guideContent.es;
 
     const tabs = [
-        { id: 'vacaciones', icon: '🏖️', label: 'Vacaciones' },
-        { id: 'eventos',    icon: '🎯', label: 'Eventos & Clientes' },
-        ...(isManager ? [{ id: 'admin', icon: '⚙️', label: isAdmin ? 'Administración' : 'Gestión' }] : []),
+        { id: 'vacaciones', icon: '🏖️', label: gc.tabs.vacaciones },
+        { id: 'eventos',    icon: '🎯', label: gc.tabs.eventos },
+        ...(isManager ? [{ id: 'admin', icon: '⚙️', label: isAdmin ? gc.tabs.admin : gc.tabs.manager }] : []),
     ];
 
     container.innerHTML = `
     <div class="page-header">
         <div>
-            <h1 class="page-title">📖 Guía de uso</h1>
-            <p class="page-subtitle">Todo lo que necesitas saber para usar Control Vacances</p>
+            <h1 class="page-title">📖 ${gc.title}</h1>
+            <p class="page-subtitle">${gc.subtitle}</p>
         </div>
     </div>
 
-    <!-- Primeros pasos -->
     <div style="margin-bottom:32px;">
-        <h2 style="font-size:1rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Primeros Pasos</h2>
+        <h2 style="font-size:1rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">${gc.first_steps}</h2>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
-            ${quickCard('🏖️', 'Solicitar Vacaciones', 'Pide tus días libres en pocos clics', 'my-vacations')}
-            ${quickCard('🏢', 'Añadir un Cliente', 'Da de alta nuevos clientes en el sistema', 'clients-config')}
-            ${quickCard('🎯', 'Crear un Evento', 'Asocia un evento o proyecto a un cliente', 'events')}
-            ${isManager ? quickCard('👥', 'Gestionar Equipo', 'Aprueba solicitudes y consulta el equipo', 'requests') : ''}
+            ${gc.qc.filter(c => !c.mgr || isManager).map(c => quickCard(c.icon, c.title, c.desc, c.page, gc.go)).join('')}
         </div>
     </div>
 
-    <!-- Tabs -->
     <div class="guide-tabs" style="display:flex;gap:8px;margin-bottom:24px;border-bottom:2px solid var(--border);padding-bottom:0;">
         ${tabs.map((tab, i) => `
         <button class="guide-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${tab.id}"
@@ -4633,12 +4932,10 @@ async function loadGuide(container) {
         </button>`).join('')}
     </div>
 
-    <!-- Tab content -->
     <div id="guideTabContent">
-        ${renderGuideTab('vacaciones', isAdmin, isManager)}
+        ${renderGuideTab('vacaciones', isAdmin, isManager, gc)}
     </div>`;
 
-    // Tab switching
     container.querySelectorAll('.guide-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             container.querySelectorAll('.guide-tab-btn').forEach(b => {
@@ -4650,12 +4947,12 @@ async function loadGuide(container) {
             btn.style.borderBottomColor = 'var(--primary)';
             btn.classList.add('active');
             document.getElementById('guideTabContent').innerHTML =
-                renderGuideTab(btn.dataset.tab, isAdmin, isManager);
+                renderGuideTab(btn.dataset.tab, isAdmin, isManager, gc);
         });
     });
 }
 
-function quickCard(icon, title, desc, page) {
+function quickCard(icon, title, desc, page, goLabel) {
     return `<div onclick="navigateTo('${page}')"
         style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;
                cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:8px;"
@@ -4664,7 +4961,7 @@ function quickCard(icon, title, desc, page) {
         <div style="font-size:2rem;">${icon}</div>
         <div style="font-weight:700;font-size:.95rem;color:var(--text-primary);">${title}</div>
         <div style="font-size:.82rem;color:var(--text-secondary);">${desc}</div>
-        <div style="font-size:.8rem;color:var(--primary);font-weight:600;margin-top:4px;">Ir →</div>
+        <div style="font-size:.8rem;color:var(--primary);font-weight:600;margin-top:4px;">${goLabel}</div>
     </div>`;
 }
 
@@ -4679,15 +4976,15 @@ function guideSection(title, steps) {
                              color:#fff;font-weight:700;font-size:.85rem;display:flex;align-items:center;
                              justify-content:center;">${i + 1}</span>
                 <div>
-                    <div style="font-weight:600;font-size:.9rem;color:var(--text-primary);">${s.title}</div>
-                    <div style="font-size:.83rem;color:var(--text-secondary);margin-top:2px;">${s.desc}</div>
+                    <div style="font-weight:600;font-size:.9rem;color:var(--text-primary);">${s.t}</div>
+                    <div style="font-size:.83rem;color:var(--text-secondary);margin-top:2px;">${s.d}</div>
                 </div>
             </li>`).join('')}
         </ol>
     </div>`;
 }
 
-function videoCard(label) {
+function videoCard(label, pendingLabel) {
     return `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;
                 display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:180px;">
@@ -4695,89 +4992,27 @@ function videoCard(label) {
                     justify-content:center;font-size:1.6rem;">▶️</div>
         <div style="font-weight:600;font-size:.9rem;color:var(--text-primary);text-align:center;">${label}</div>
         <span style="background:var(--warning-light,#FFF3CD);color:#856404;font-size:.75rem;
-                     font-weight:600;padding:3px 10px;border-radius:20px;">Pendiente</span>
+                     font-weight:600;padding:3px 10px;border-radius:20px;">${pendingLabel}</span>
     </div>`;
 }
 
-function renderGuideTab(tabId, isAdmin, isManager) {
+function renderGuideTab(tabId, isAdmin, isManager, gc) {
     if (tabId === 'vacaciones') {
         return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
-            ${guideSection('🏖️ Cómo solicitar vacaciones', [
-                { title: 'Ve a "Mis Vacaciones"', desc: 'En el menú lateral, haz clic en "Mis Vacaciones".' },
-                { title: 'Pulsa "+ Nueva Solicitud"', desc: 'Aparecerá el formulario para elegir fechas.' },
-                { title: 'Selecciona las fechas', desc: 'Elige la fecha de inicio y fin. Se calculan automáticamente los días laborables.' },
-                { title: 'Añade un motivo (opcional)', desc: 'Puedes añadir una nota o justificación para tu responsable.' },
-                { title: 'Envía la solicitud', desc: 'Tu responsable recibirá la solicitud y la aprobará o rechazará.' },
-            ])}
-            ${guideSection('📅 Cómo consultar el calendario', [
-                { title: 'Accede al Calendario', desc: 'Desde el menú lateral, pulsa "Calendario".' },
-                { title: 'Filtra por equipo o departamento', desc: 'Usa los filtros superiores para ver solo a ciertos empleados.' },
-                { title: 'Consulta los festivos', desc: 'Los festivos oficiales aparecen marcados en rojo en el calendario.' },
-                { title: 'Navega por meses', desc: 'Usa las flechas para moverte entre meses y planificar con antelación.' },
-            ])}
-            ${guideSection('⭐ Cómo usar los Días Extras', [
-                { title: '¿Qué son los días extras?', desc: 'Son días adicionales concedidos por trabajar fines de semana u otros motivos.' },
-                { title: 'Consulta tu saldo', desc: 'En el Dashboard verás tu total de días disponibles (normales + extras ⭐).' },
-                { title: 'Se usan automáticamente', desc: 'Al solicitar vacaciones, los días extras se consumen una vez agotados los normales.' },
-                { title: 'Historial en "Dies Extres"', desc: 'Los administradores pueden ver el detalle de cada entrada en la sección de administración.' },
-            ])}
-            ${videoCard('Tutorial: Solicitar vacaciones')}
+            ${gc.vac.map(s => guideSection(s.title, s.steps)).join('')}
+            ${videoCard(gc.vid_vac, gc.pending)}
         </div>`;
     }
     if (tabId === 'eventos') {
         return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
-            ${guideSection('🏢 Cómo dar de alta un cliente', [
-                { title: 'Ve a "Clientes"', desc: 'En la sección Eventos del menú lateral, pulsa "Clientes".' },
-                { title: 'Pulsa "+ Nuevo Cliente"', desc: 'Se abrirá el formulario de alta de cliente.' },
-                { title: 'Rellena los datos', desc: 'Nombre, persona de contacto, email, teléfono y sector.' },
-                { title: 'Sube el logo (opcional)', desc: 'Haz clic en el icono de imagen para subir el logotipo del cliente.' },
-                { title: 'Guarda el cliente', desc: 'El cliente quedará disponible para asociarle eventos.' },
-            ])}
-            ${guideSection('🎯 Cómo crear un evento', [
-                { title: 'Accede a "Dashboard Eventos"', desc: 'Desde el menú lateral en la sección Eventos.' },
-                { title: 'Pulsa "+ Nuevo Evento"', desc: 'Se abrirá el formulario de creación.' },
-                { title: 'Selecciona el cliente', desc: 'Elige el cliente al que está asociado el evento.' },
-                { title: 'Define fechas y descripción', desc: 'Añade nombre del evento, fechas de inicio y fin, y una descripción.' },
-                { title: 'Asigna el equipo', desc: 'Selecciona los empleados que participarán en el evento.' },
-                { title: 'Guarda el evento', desc: 'Aparecerá en el Dashboard y en el Calendario de Eventos.' },
-            ])}
-            ${guideSection('✏️ Cómo editar o eliminar un evento', [
-                { title: 'Localiza el evento', desc: 'En el Dashboard Eventos o en el detalle del cliente.' },
-                { title: 'Pulsa el botón ✏️ (editar)', desc: 'Se abrirá el formulario con los datos actuales para modificarlos.' },
-                { title: 'Guarda los cambios', desc: 'Los cambios se reflejarán inmediatamente en todos los calendarios.' },
-                { title: 'O pulsa 🗑️ para eliminar', desc: 'Se pedirá confirmación antes de eliminar el evento definitivamente.' },
-            ])}
-            ${videoCard('Tutorial: Crear un evento')}
+            ${gc.evt.map(s => guideSection(s.title, s.steps)).join('')}
+            ${videoCard(gc.vid_evt, gc.pending)}
         </div>`;
     }
     if (tabId === 'admin') {
         return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
-            ${guideSection('✅ Cómo gestionar solicitudes', [
-                { title: 'Ve a "Solicitudes"', desc: 'En la sección Gestión del menú lateral.' },
-                { title: 'Revisa las solicitudes pendientes', desc: 'Las marcadas en amarillo están esperando tu aprobación.' },
-                { title: 'Aprueba o rechaza', desc: 'Pulsa ✓ para aprobar o ✗ para rechazar. Puedes añadir un motivo de rechazo.' },
-                { title: 'Gestiona cancelaciones', desc: 'Si un empleado pide cancelar una vacación aprobada, también recibirás la solicitud aquí.' },
-            ])}
-            ${isAdmin ? guideSection('👤 Cómo dar de alta un empleado', [
-                { title: 'Ve a "Empleados"', desc: 'En la sección Administración del menú lateral.' },
-                { title: 'Pulsa "+ Nuevo Empleado"', desc: 'Se abrirá el formulario de registro.' },
-                { title: 'Rellena los datos', desc: 'Nombre, apellido, email, contraseña, rol y departamento.' },
-                { title: 'Asigna días de vacaciones', desc: 'Define el total de días anuales asignados al empleado.' },
-                { title: 'Guarda el empleado', desc: 'Recibirá un email con sus credenciales de acceso.' },
-            ]) : ''}
-            ${isAdmin ? guideSection('⭐ Cómo añadir días extras a un empleado', [
-                { title: 'Ve a "Días Extras"', desc: 'En la sección Administración del menú lateral.' },
-                { title: 'Pulsa "+ Añadir Días Extras"', desc: 'Se abrirá el formulario de asignación.' },
-                { title: 'Selecciona el empleado', desc: 'Elige el empleado al que quieres añadir días.' },
-                { title: 'Indica los días y el motivo', desc: 'Especifica cuántos días y por qué (ej: trabajo fin de semana).' },
-                { title: 'Guarda la entrada', desc: 'Los días se suman al saldo disponible del empleado de inmediato.' },
-            ]) : ''}
-            ${isAdmin ? guideSection('🎉 Cómo gestionar festivos', [
-                { title: 'Ve a "Festivos"', desc: 'En la sección Administración.' },
-                { title: 'Añade festivos locales', desc: 'Puedes añadir los festivos de tu comunidad o ciudad.' },
-                { title: 'Los festivos no cuentan como vacaciones', desc: 'Al solicitar un período, los festivos se excluyen automáticamente del conteo.' },
-            ]) : ''}
-            ${videoCard('Tutorial: Gestión de solicitudes')}
+            ${gc.adm.filter(s => !s.admin || isAdmin).map(s => guideSection(s.title, s.steps)).join('')}
+            ${videoCard(gc.vid_adm, gc.pending)}
         </div>`;
     }
     return '';
