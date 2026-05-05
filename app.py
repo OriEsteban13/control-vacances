@@ -181,7 +181,8 @@ class User(UserMixin, db.Model):
             if balance.carried_over:
                 if not balance.carryover_expiry or balance.carryover_expiry >= date.today():
                     carried = balance.carried_over
-            return balance.total_days + carried
+            base = balance.total_days if balance.total_days else self.total_days
+            return base + carried
         if self.hire_date:
             return calculate_prorated_days(self.total_days, self.hire_date, year)
         return self.total_days

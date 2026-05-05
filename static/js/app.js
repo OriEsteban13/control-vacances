@@ -3030,10 +3030,12 @@ window.openEditCarryoverModal = function(userId, userName, currentCarryover) {
 
 window.saveCarryover = async function(userId, year) {
     const days = parseInt(document.getElementById('carryoverInput').value) || 0;
+    const user = (State.users || []).find(u => u.id === userId);
+    const totalDays = user ? user.total_days : 21;
     try {
         await api('/api/balances', {
             method: 'POST',
-            body: JSON.stringify({ user_id: userId, year, vacation_type: 'vacaciones', carried_over: days })
+            body: JSON.stringify({ user_id: userId, year, vacation_type: 'vacaciones', carried_over: days, total_days: totalDays })
         });
         closeModal();
         showToast(t('carryover_days') + ' ' + t('profile_updated').toLowerCase(), 'success');
