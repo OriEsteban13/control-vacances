@@ -29,6 +29,7 @@ const State = {
     events: [],
     eventsYear: new Date().getFullYear(),
     eventsCalMonth: new Date().getMonth() + 1,
+    eventsCalView: 'monthly',
     eventsFilterClient: null,
     eventsFilterTypology: null,
     eventsFilterUser: null,
@@ -703,11 +704,11 @@ function renderLayout() {
                     <span>${t('extra_days')}</span>
                 </div>
                 ` : ''}
+                <div class="nav-section-title">${State.lang === 'en' ? 'Account' : State.lang === 'ca' ? 'Compte' : 'Cuenta'}</div>
                 <div class="nav-item" data-page="guide">
                     <span class="nav-icon">📖</span>
                     <span>${t('guide')}</span>
                 </div>
-                <div class="nav-section-title">${State.lang === 'en' ? 'Account' : State.lang === 'ca' ? 'Compte' : 'Cuenta'}</div>
                 <div class="nav-item" data-page="settings">
                     <span class="nav-icon">⚙️</span>
                     <span>${t('settings')}</span>
@@ -3307,6 +3308,7 @@ function applyEventsFilters(events) {
 
 async function loadEvents(container) {
     const isAdmin = State.user.role === 'admin';
+    const canEdit = true; // all roles can create/edit events and clients
     const year = State.eventsYear;
 
     const [stats, events, clients, users] = await Promise.all([
@@ -3324,7 +3326,7 @@ async function loadEvents(container) {
     if (State.eventsFilterUser) {
         const emp = users.find(u => u.id === State.eventsFilterUser);
         if (emp) {
-            await renderEmployeeEventDetail(container, emp, events, clients, users, isAdmin, year);
+            await renderEmployeeEventDetail(container, emp, events, clients, users, canEdit, year);
             return;
         }
     }
@@ -3362,7 +3364,7 @@ async function loadEvents(container) {
                     ${[year-1, year, year+1].map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
                 </select>
                 <button class="btn btn-secondary" onclick="exportEventsDashboardCSV()">⬇ CSV</button>
-                ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
+                ${canEdit ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
             </div>
         </div>
 
@@ -3389,9 +3391,9 @@ async function loadEvents(container) {
                         <thead><tr>
                             <th>Evento</th><th>Cliente</th><th>Tipología</th>
                             <th>Fechas</th><th>Días</th><th>Equipo asignado</th><th>Estado</th>
-                            ${isAdmin ? '<th></th>' : ''}
+                            ${canEdit ? '<th></th>' : ''}
                         </tr></thead>
-                        <tbody>${upcoming.map(e => renderEventRow(e, isAdmin)).join('')}</tbody>
+                        <tbody>${upcoming.map(e => renderEventRow(e, canEdit)).join('')}</tbody>
                     </table>`
                 }
             </div>
@@ -3447,8 +3449,8 @@ async function loadEvents(container) {
             <div class="panel-header"><h2>🗂️ Historial ${year}</h2><span style="font-size:0.8rem;color:var(--text-muted);">${past.length} finalizado(s)</span></div>
             <div class="panel-body no-padding">
                 <table class="data-table">
-                    <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Equipo</th><th>Estado</th>${isAdmin?'<th></th>':''}</tr></thead>
-                    <tbody>${past.slice().reverse().map(e => renderEventRow(e, isAdmin)).join('')}</tbody>
+                    <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Equipo</th><th>Estado</th>${canEdit?'<th></th>':''}</tr></thead>
+                    <tbody>${past.slice().reverse().map(e => renderEventRow(e, canEdit)).join('')}</tbody>
                 </table>
             </div>
         </div>` : ''}
@@ -3756,6 +3758,7 @@ window.deleteEvent = async function(id) {
 
 async function loadEventsCalendar(container) {
     const isAdmin = State.user.role === 'admin';
+    const canEdit = true;
     const calYear = State.eventsYear;
     const month   = State.eventsCalMonth;
 
@@ -3860,46 +3863,80 @@ async function loadEventsCalendar(container) {
             const names = (e.assignments||[]).map(a=>a.employee_name||'').filter(Boolean);
             const tip   = `${e.name}${e.location?' · '+e.location:''}${names.length?' · '+names.join(', '):''}`;
             const label = names.length ? `${e.name} · ${names.join(', ')}` : e.name;
-            return `<div class="evt-bar" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright}" title="${esc(tip)}">${isStart?`<span class="evt-bar-label">${esc(label)}</span>`:''}</div>`;
+            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;" title="${esc(tip)}">${isStart?`<span class="evt-bar-label">${esc(label)}</span>`:''}</div>`;
         }).join('');
 
         weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
+    }
+
+    const view = State.eventsCalView || 'monthly';
+    const viewLabels = { monthly: State.lang === 'en' ? 'Monthly' : State.lang === 'ca' ? 'Mensual' : 'Mensual',
+                         quarterly: State.lang === 'en' ? 'Quarterly' : State.lang === 'ca' ? 'Trimestral' : 'Trimestral',
+                         annual: State.lang === 'en' ? 'Annual' : State.lang === 'ca' ? 'Anual' : 'Anual' };
+    const navPrev = State.lang === 'en' ? '← Prev' : '← Anterior';
+    const navNext = State.lang === 'en' ? 'Next →' : State.lang === 'ca' ? 'Seg →' : 'Siguiente →';
+    const legendLabel = State.lang === 'en' ? 'Legend' : State.lang === 'ca' ? 'Llegenda' : 'Leyenda';
+
+    let mainContent = '';
+    let periodLabel = '';
+
+    if (view === 'annual') {
+        periodLabel = `${calYear}`;
+        mainContent = renderEventsAnnualView(calYear, filtered, MONTHS);
+    } else if (view === 'quarterly') {
+        const qStart = Math.floor((month - 1) / 3) * 3 + 1;
+        periodLabel = `Q${Math.ceil(month/3)} ${calYear}: ${MONTHS[qStart-1]} – ${MONTHS[qStart+1]}`;
+        mainContent = [qStart, qStart+1, qStart+2].map(m => {
+            const mEvents = filtered.filter(e => {
+                const ms = `${calYear}-${String(m).padStart(2,'0')}-01`;
+                const ld = new Date(calYear, m, 0).getDate();
+                const me = `${calYear}-${String(m).padStart(2,'0')}-${String(ld).padStart(2,'0')}`;
+                return e.start_date <= me && e.end_date >= ms;
+            });
+            return `<div style="flex:1;min-width:0;">
+                <div style="font-weight:700;text-align:center;padding:8px 0;font-size:.9rem;">${MONTHS[m-1]}</div>
+                ${renderEventsMonthGrid(calYear, m, mEvents, todayStr, true)}
+            </div>`;
+        }).join('');
+        mainContent = `<div style="display:flex;gap:12px;overflow-x:auto;">${mainContent}</div>`;
+    } else {
+        periodLabel = `${MONTHS[month-1]} ${calYear} · ${monthEvents.length} evento${monthEvents.length !== 1 ? 's' : ''}`;
+        mainContent = renderEventsMonthGrid(calYear, month, monthEvents, todayStr, false, weeksHTML);
     }
 
     container.innerHTML = `
     <div class="page-enter">
         <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
             <div>
-                <h1>📆 Calendario de Eventos</h1>
-                <p>${MONTHS[month-1]} ${calYear} · ${monthEvents.length} evento${monthEvents.length !== 1 ? 's' : ''}</p>
+                <h1>📆 ${State.lang === 'en' ? 'Events Calendar' : State.lang === 'ca' ? 'Calendari Esdeveniments' : 'Calendario de Eventos'}</h1>
+                <p>${periodLabel}</p>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                    ${['monthly','quarterly','annual'].map(v=>`<button onclick="setEventsCalView('${v}')" style="padding:6px 14px;border:none;cursor:pointer;font-size:.82rem;font-weight:600;background:${view===v?'var(--primary)':'var(--surface)'};color:${view===v?'#fff':'var(--text-secondary)'};">${viewLabels[v]}</button>`).join('')}
+                </div>
                 <button class="btn btn-secondary" onclick="exportEventsCalendarCSV()">⬇ CSV</button>
-                ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
+                ${canEdit ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
             </div>
         </div>
 
         ${eventsFilterBar(clients, allUsers)}
 
         <div class="panel">
+            ${view !== 'annual' ? `
             <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center;">
-                <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(-1)">← Anterior</button>
+                <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(${view==='quarterly'?-3:-1})">${navPrev}</button>
                 <h2 style="margin:0;font-size:1rem;">${MONTHS[month-1]} ${calYear}</h2>
-                <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(1)">Siguiente →</button>
-            </div>
+                <button class="btn btn-secondary btn-sm" onclick="changeEventsCalMonth(${view==='quarterly'?3:1})">${navNext}</button>
+            </div>` : ''}
             <div class="panel-body no-padding" style="padding:0 8px 8px;">
-                <div class="evt-cal-wrapper">
-                    <div class="evt-cal-header">
-                        ${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=>`<div class="evt-cal-head-cell">${d}</div>`).join('')}
-                    </div>
-                    ${weeksHTML}
-                </div>
+                ${mainContent}
             </div>
         </div>
 
         ${clients.length > 0 ? `
         <div class="panel">
-            <div class="panel-header"><h2>Leyenda</h2></div>
+            <div class="panel-header"><h2>${legendLabel}</h2></div>
             <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:14px;">
                 ${clients.map(c=>`
                     <div style="display:flex;align-items:center;gap:8px;">
@@ -3919,12 +3956,173 @@ window.changeEventsCalMonth = function(delta) {
     renderPage();
 };
 
+window.setEventsCalView = function(view) {
+    State.eventsCalView = view;
+    if (view === 'annual') {
+        // For annual view, load all events for the year
+        api(`/api/events?year=${State.eventsYear}`).then(events => {
+            State.events = events;
+            renderPage();
+        });
+    } else {
+        renderPage();
+    }
+};
+
+function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, prebuiltWeeksHTML) {
+    const BAR_H = compact ? 16 : 22;
+    const BAR_GAP = compact ? 2 : 4;
+    const DAY_H = compact ? 22 : 30;
+    const PAD_TOP = 4;
+    const PAD_BOTTOM = compact ? 4 : 8;
+
+    if (prebuiltWeeksHTML) {
+        const dayNames = State.lang === 'en'
+            ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+            : State.lang === 'ca'
+            ? ['Dl','Dt','Dc','Dj','Dv','Ds','Dg']
+            : ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+        return `<div class="evt-cal-wrapper">
+            <div class="evt-cal-header">${dayNames.map(d=>`<div class="evt-cal-head-cell">${d}</div>`).join('')}</div>
+            ${prebuiltWeeksHTML}
+        </div>`;
+    }
+
+    // Compact month grid (for quarterly/annual)
+    const firstDay = new Date(calYear, month - 1, 1);
+    const lastDay = new Date(calYear, month, 0);
+    const startWeekday = (firstDay.getDay() + 6) % 7;
+    const totalDays = lastDay.getDate();
+    const totalWeeks = Math.ceil((startWeekday + totalDays) / 7);
+    const gridStart = new Date(calYear, month - 1, 1 - startWeekday);
+
+    function parseLocalDate(s) { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+    function daysBetween(a,b) { return Math.round((parseLocalDate(b)-parseLocalDate(a))/86400000); }
+    function toDateStr(dt) { return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }
+
+    let weeksHTML = '';
+    for (let w = 0; w < totalWeeks; w++) {
+        const weekDays = Array.from({length:7}, (_,d) => {
+            const dt = new Date(gridStart); dt.setDate(gridStart.getDate() + w*7+d); return dt;
+        });
+        const weekStartStr = toDateStr(weekDays[0]);
+        const weekEndStr = toDateStr(weekDays[6]);
+        const weekEvts = monthEvents
+            .filter(e => e.start_date <= weekEndStr && e.end_date >= weekStartStr)
+            .sort((a,b) => { const sc=a.start_date.localeCompare(b.start_date); return sc!==0?sc:b.end_date.localeCompare(a.end_date); });
+        const rowEndCol = [];
+        const bars = weekEvts.map(e => {
+            const sc=Math.max(0,daysBetween(weekStartStr,e.start_date));
+            const ec=Math.min(6,daysBetween(weekStartStr,e.end_date));
+            let row=0; while(rowEndCol[row]!==undefined&&rowEndCol[row]>=sc) row++;
+            rowEndCol[row]=ec;
+            return {e,sc,ec,row,isStart:e.start_date>=weekStartStr,isEnd:e.end_date<=weekEndStr,color:e.client_color||'#6C5CE7'};
+        });
+        const numRows = bars.length>0?Math.max(...bars.map(b=>b.row))+1:0;
+        const weekH = DAY_H+PAD_TOP+numRows*(BAR_H+BAR_GAP)+PAD_BOTTOM;
+        const dayNums = weekDays.map(dt => {
+            const dStr=toDateStr(dt);
+            const inMonth=dt.getMonth()===month-1&&dt.getFullYear()===calYear;
+            const isToday=dStr===todayStr;
+            const cls=`evt-day-num${inMonth?'':' out-month'}${compact?' compact-day':''}`;
+            return isToday?`<div class="${cls}"><span class="evt-today-dot">${dt.getDate()}</span></div>`:`<div class="${cls}">${dt.getDate()}</div>`;
+        }).join('');
+        const barEls = bars.map(({e,sc,ec,row,isStart,isEnd,color})=>{
+            const left=(sc/7*100).toFixed(3);
+            const width=((ec-sc+1)/7*100).toFixed(3);
+            const top=DAY_H+PAD_TOP+row*(BAR_H+BAR_GAP);
+            const br=`${isStart?'4px':'2px'} ${isEnd?'4px':'2px'} ${isEnd?'4px':'2px'} ${isStart?'4px':'2px'}`;
+            const bleft=!isStart?'border-left:2px dashed rgba(255,255,255,0.4);':'';
+            const bright=!isEnd?'border-right:2px dashed rgba(255,255,255,0.4);':'';
+            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;" title="${esc(e.name)}">${isStart&&!compact?`<span class="evt-bar-label" style="font-size:.7rem;">${esc(e.name)}</span>`:''}</div>`;
+        }).join('');
+        weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
+    }
+    const dayNames = State.lang === 'en' ? ['M','T','W','T','F','S','S'] : State.lang === 'ca' ? ['Dl','Dt','Dc','Dj','Dv','Ds','Dg'] : ['L','M','X','J','V','S','D'];
+    return `<div class="evt-cal-wrapper" style="${compact?'font-size:.78rem;':''}">
+        <div class="evt-cal-header">${dayNames.map(d=>`<div class="evt-cal-head-cell">${d}</div>`).join('')}</div>
+        ${weeksHTML}
+    </div>`;
+}
+
+function renderEventsAnnualView(calYear, filtered, MONTHS) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:8px;">
+        ${Array.from({length:12},(_,i)=>{
+            const m = i+1;
+            const ms=`${calYear}-${String(m).padStart(2,'0')}-01`;
+            const ld=new Date(calYear,m,0).getDate();
+            const me=`${calYear}-${String(m).padStart(2,'0')}-${String(ld).padStart(2,'0')}`;
+            const mEvts=filtered.filter(e=>e.start_date<=me&&e.end_date>=ms);
+            return `<div style="background:var(--bg-glass);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+                <div style="font-weight:700;text-align:center;padding:8px 0 4px;font-size:.9rem;color:var(--text-primary);">${MONTHS[i]}</div>
+                ${renderEventsMonthGrid(calYear, m, mEvts, todayStr, true)}
+            </div>`;
+        }).join('')}
+    </div>`;
+}
+
+window.openEventDetailModal = async function(eventId) {
+    // Find event from current state or fetch
+    let ev = (State.events||[]).find(e=>e.id===eventId);
+    if (!ev) {
+        try { const data = await api(`/api/events?year=${State.eventsYear}`); ev = data.find(e=>e.id===eventId); } catch(e){ return; }
+    }
+    if (!ev) return;
+    const canEdit = true;
+    const fmt = s => s ? formatDate(s) : '—';
+    const team = (ev.assignments||[]).map(a=>`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            ${renderAvatarEl(a.employee_avatar_color, a.employee_initials, a.employee_avatar_image, 28)}
+            <span style="font-size:.85rem;">${esc(a.employee_name||'')}</span>
+        </div>`).join('') || `<span style="color:var(--text-muted);font-size:.85rem;">${State.lang==='en'?'No team assigned':State.lang==='ca'?"Sense equip assignat":'Sin equipo asignado'}</span>`;
+    const dLabel = State.lang==='en'?'Days':State.lang==='ca'?'Dies':'Días';
+    const clLabel = State.lang==='en'?'Client':State.lang==='ca'?'Client':'Cliente';
+    const teLabel = State.lang==='en'?'Team':State.lang==='ca'?'Equip':'Equipo';
+    const editLabel = State.lang==='en'?'Edit event':State.lang==='ca'?"Editar event":'Editar evento';
+    openModal(`
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header" style="border-left:4px solid ${ev.client_color||'#6C5CE7'};padding-left:12px;">
+            <div>
+                <h3 style="margin:0;">${esc(ev.name)}</h3>
+                ${ev.client_name?`<div style="font-size:.82rem;color:var(--text-muted);margin-top:2px;">${esc(ev.client_name)} ${typologyBadge(ev.client_typology||'')}</div>`:''}
+            </div>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div style="background:var(--bg-glass);border-radius:8px;padding:12px;">
+                    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:2px;">📅 ${State.lang==='en'?'Dates':State.lang==='ca'?'Dates':'Fechas'}</div>
+                    <div style="font-weight:600;font-size:.88rem;">${fmt(ev.start_date)}</div>
+                    <div style="font-size:.8rem;color:var(--text-muted);">→ ${fmt(ev.end_date)}</div>
+                </div>
+                <div style="background:var(--bg-glass);border-radius:8px;padding:12px;">
+                    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:2px;">📊 ${dLabel}</div>
+                    <div style="font-weight:700;font-size:1.4rem;color:var(--primary);">${ev.duration_days||'—'}</div>
+                </div>
+            </div>
+            ${ev.location?`<div style="font-size:.85rem;">📍 ${esc(ev.location)}</div>`:''}
+            ${ev.notes?`<div style="font-size:.85rem;color:var(--text-muted);border-left:3px solid var(--border);padding-left:10px;">${esc(ev.notes)}</div>`:''}
+            <div>
+                <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">👥 ${teLabel}</div>
+                ${team}
+            </div>
+        </div>
+        ${canEdit ? `
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">${t('cancel')}</button>
+            <button class="btn btn-primary" onclick="closeModal();openEditEventModal(${ev.id})">✏️ ${editLabel}</button>
+        </div>` : `<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">${t('cancel')}</button></div>`}
+    </div>`);
+};
+
 // ─────────────────────────────────────────────
 // Clients Config Page
 // ─────────────────────────────────────────────
 
 async function loadClientsConfig(container) {
     const isAdmin = State.user.role === 'admin';
+    const canEdit = true;
     const [clients, allEvents, allUsers] = await Promise.all([
         api('/api/clients'),
         api(`/api/events?year=${State.eventsYear}`),
@@ -3979,9 +4177,9 @@ async function loadClientsConfig(container) {
                         ${client.notes ? `<span style="font-size:0.82rem;color:var(--text-muted);">${esc(client.notes)}</span>` : ''}
                     </div>
                 </div>
-                ${isAdmin ? `<div style="display:flex;gap:6px;">
-                    <button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${client.id})">✏️ Editar</button>
-                    <button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>
+                ${canEdit ? `<div style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${client.id})">✏️ ${State.lang==='en'?'Edit':State.lang==='ca'?'Editar':'Editar'}</button>
+                    <button class="btn btn-primary" onclick="openCreateEventModal()">＋ ${State.lang==='en'?'New Event':State.lang==='ca'?'Nou Esdeveniment':'Nuevo Evento'}</button>
                 </div>` : ''}
             </div>
 
@@ -4112,7 +4310,7 @@ async function loadClientsConfig(container) {
                 <h1>🏢 Clientes</h1>
                 <p>Configuración y tipología de clientes / propiedades</p>
             </div>
-            ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateClientModal()">＋ Nuevo Cliente</button>` : ''}
+            ${canEdit ? `<button class="btn btn-primary" onclick="openCreateClientModal()">＋ ${State.lang==='en'?'New Client':State.lang==='ca'?'Nou Client':'Nuevo Cliente'}</button>` : ''}
         </div>
 
         <!-- Stats quick -->
@@ -4147,10 +4345,10 @@ async function loadClientsConfig(container) {
                                     <div style="font-size:0.78rem;color:var(--text-muted);">${c.total_events} evento(s) · ${c.upcoming_events} próximos</div>
                                 </div>
                             </div>
-                            ${isAdmin ? `<div style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
-                                <button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${c.id})" title="Editar">✏️</button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteClient(${c.id})" title="Eliminar">🗑️</button>
-                            </div>` : ''}
+                            <div style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
+                                ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${c.id})" title="Editar">✏️</button>` : ''}
+                                ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteClient(${c.id})" title="Eliminar">🗑️</button>` : ''}
+                            </div>
                         </div>
                         ${c.notes ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;">${esc(c.notes)}</div>` : ''}
                         <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">

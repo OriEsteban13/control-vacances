@@ -1704,7 +1704,7 @@ def get_clients():
 @app.route('/api/clients', methods=['POST'])
 @login_required
 def create_client():
-    if current_user.role != 'admin':
+    if current_user.role not in ('admin', 'manager', 'employee'):
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
     data = request.get_json() or {}
     name = data.get('name', '').strip()
@@ -1728,7 +1728,7 @@ def create_client():
 @app.route('/api/clients/<int:client_id>', methods=['PUT'])
 @login_required
 def update_client(client_id):
-    if current_user.role != 'admin':
+    if current_user.role not in ('admin', 'manager', 'employee'):
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
     client = db.session.get(Client, client_id)
     if not client:
@@ -1857,7 +1857,7 @@ def get_events_stats():
 @app.route('/api/events', methods=['POST'])
 @login_required
 def create_event():
-    if current_user.role != 'admin':
+    if current_user.role not in ('admin', 'manager', 'employee'):
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
     data = request.get_json() or {}
     name = data.get('name', '').strip()
@@ -1897,7 +1897,7 @@ def create_event():
 @app.route('/api/events/<int:event_id>', methods=['PUT'])
 @login_required
 def update_event(event_id):
-    if current_user.role != 'admin':
+    if current_user.role not in ('admin', 'manager', 'employee'):
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
     event = db.session.get(Event, event_id)
     if not event:
