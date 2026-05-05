@@ -186,6 +186,17 @@ class User(UserMixin, db.Model):
             return calculate_prorated_days(self.total_days, self.hire_date, year)
         return self.total_days
 
+    def get_carryover(self, year=None):
+        if year is None:
+            year = date.today().year
+        balance = VacationBalance.query.filter_by(
+            user_id=self.id, year=year, vacation_type='vacaciones'
+        ).first()
+        if balance and balance.carried_over:
+            if not balance.carryover_expiry or balance.carryover_expiry >= date.today():
+                return balance.carried_over
+        return 0
+
     def extra_days_total(self):
         return sum(e.days for e in ExtraDaysEntry.query.filter_by(user_id=self.id).all())
 
@@ -214,6 +225,7 @@ class User(UserMixin, db.Model):
             'role': self.role,
             'total_days': self.total_days,
             'allocated_days': self.get_allocation(),
+            'carryover_days': self.get_carryover(),
             'days_used': self.days_used(),
             'days_pending': self.days_pending(),
             'days_remaining': self.days_remaining(),
@@ -2161,6 +2173,53 @@ def delete_balance(balance_id):
     db.session.delete(balance)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@app.route('/api/close-year', methods=['GET', 'POST'])
+@login_required
+def close_year():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    if request.method == 'GET':
+        year = request.args.get('year', date.today().year, type=int)
+    else:
+        data = request.get_json() or {}
+        year = data.get('year', date.today().year)
+    next_year = year + 1
+    users = User.query.filter_by(is_deleted=False).all()
+    results = []
+    for u in users:
+        allocation = u.get_allocation(year)
+        used = u.days_used(year)
+        remaining = allocation - used
+        carryover = max(0, remaining)
+        results.append({
+            'user_id': u.id,
+            'user_name': u.full_name,
+            'department': u.department,
+            'total_days': u.total_days,
+            'allocation': allocation,
+            'days_used': used,
+            'remaining': remaining,
+            'carryover': carryover,
+        })
+    if request.method == 'POST':
+        user_map = {u.id: u for u in users}
+        for r in results:
+            balance = VacationBalance.query.filter_by(
+                user_id=r['user_id'], year=next_year, vacation_type='vacaciones'
+            ).first()
+            if not balance:
+                balance = VacationBalance(
+                    user_id=r['user_id'], year=next_year, vacation_type='vacaciones'
+                )
+                db.session.add(balance)
+            balance.total_days = user_map[r['user_id']].total_days
+            balance.carried_over = r['carryover']
+        db.session.commit()
+        log_audit('close_year', 'system', 0, f"year={year} users={len(results)}")
+        return jsonify({'success': True, 'year': year, 'next_year': next_year, 'results': results})
+    return jsonify({'success': True, 'year': year, 'next_year': next_year, 'results': results})
 
 
 # ─────────────────────────────────────────────

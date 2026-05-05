@@ -98,6 +98,13 @@ const _tr = {
         select_employee: 'Selecciona un empleado', employee_not_found: 'Empleado no encontrado',
         save: 'Guardar', create: 'Crear', edit: 'Editar', delete: 'Eliminar',
         yes_delete: 'Sí, eliminar', no_cancel: 'No, cancelar',
+        carryover_days: 'Días Arrastrados', carryover_from: 'Del año anterior',
+        carryover_breakdown: 'días del año + {c} arrastrados del año anterior = {t} disponibles',
+        close_year_title: 'Cierre de Año', close_year_subtitle: 'Calcula y traslada los días no usados al año siguiente',
+        year_to_close: 'Año a cerrar', preview_btn: 'Vista previa', execute_close: 'Ejecutar Cierre',
+        close_year_done: 'Cierre ejecutado correctamente para', close_year_confirm: '¿Ejecutar el cierre del año {y}? Los días no usados se trasladarán al año {n}.',
+        th_allocation: 'Asignación', th_carryover: 'Arrastre', th_remaining: 'Restantes',
+        edit_carryover: 'Editar arrastre',
     },
     en: {
         dashboard: 'Dashboard', calendar: 'Calendar', my_vacations: 'My Vacations',
@@ -154,6 +161,13 @@ const _tr = {
         select_employee: 'Select an employee', employee_not_found: 'Employee not found',
         save: 'Save', create: 'Create', edit: 'Edit', delete: 'Delete',
         yes_delete: 'Yes, delete', no_cancel: 'No, cancel',
+        carryover_days: 'Carried-Over Days', carryover_from: 'From previous year',
+        carryover_breakdown: 'days this year + {c} carried over = {t} available',
+        close_year_title: 'Year Close', close_year_subtitle: 'Calculate and carry unused days to the next year',
+        year_to_close: 'Year to close', preview_btn: 'Preview', execute_close: 'Execute Close',
+        close_year_done: 'Year close executed for', close_year_confirm: 'Execute year close for {y}? Unused days will be carried to {n}.',
+        th_allocation: 'Allocation', th_carryover: 'Carryover', th_remaining: 'Remaining',
+        edit_carryover: 'Edit carryover',
     },
     ca: {
         dashboard: 'Tauler', calendar: 'Calendari', my_vacations: 'Les meves vacances',
@@ -210,6 +224,13 @@ const _tr = {
         select_employee: "Selecciona un empleat", employee_not_found: "Empleat no trobat",
         save: 'Desar', create: 'Crear', edit: 'Editar', delete: 'Eliminar',
         yes_delete: 'Sí, eliminar', no_cancel: 'No, cancel·lar',
+        carryover_days: 'Dies Arrossegats', carryover_from: "De l'any anterior",
+        carryover_breakdown: "dies de l'any + {c} arrossegats de l'any anterior = {t} disponibles",
+        close_year_title: "Tancament d'Any", close_year_subtitle: "Calcula i trasllada els dies no usats a l'any següent",
+        year_to_close: "Any a tancar", preview_btn: 'Vista prèvia', execute_close: 'Executar Tancament',
+        close_year_done: "Tancament executat correctament per a", close_year_confirm: "Executar el tancament de l'any {y}? Els dies no usats es traslladaran a l'any {n}.",
+        th_allocation: 'Assignació', th_carryover: 'Arrossegament', th_remaining: 'Restants',
+        edit_carryover: "Editar arrossegament",
     },
 };
 
@@ -1342,6 +1363,12 @@ async function loadMyVacations(container) {
                 <div class="stat-value">${State.user.days_pending}</div>
                 <div class="stat-label">${t('pending_days')}</div>
             </div>
+            ${State.user.carryover_days > 0 ? `
+            <div class="stat-card" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);">
+                <div class="stat-icon">🔄</div>
+                <div class="stat-value" style="color:#10B981;">${State.user.carryover_days}</div>
+                <div class="stat-label">${t('carryover_days')}</div>
+            </div>` : ''}
             ${State.user.extra_days > 0 ? `
             <div class="stat-card accent">
                 <div class="stat-icon">⭐</div>
@@ -1349,6 +1376,10 @@ async function loadMyVacations(container) {
                 <div class="stat-label">${t('extra_days_balance')}</div>
             </div>` : ''}
         </div>
+        ${State.user.carryover_days > 0 ? `
+        <div style="margin-bottom:var(--space-lg);padding:12px 16px;border-radius:var(--radius-md);background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);font-size:0.85rem;">
+            🔄 <strong>${State.user.total_days}</strong> ${t('carryover_breakdown').replace('{c}', State.user.carryover_days).replace('{t}', State.user.allocated_days)}
+        </div>` : ''}
         ${State.user.extra_days > 0 ? `
         <div style="margin-bottom:var(--space-lg);padding:12px 16px;border-radius:var(--radius-md);background:rgba(108,92,231,0.12);border:1px solid rgba(108,92,231,0.25);font-size:0.85rem;">
             ⭐ ${State.lang === 'en' ? 'You have' : State.lang === 'ca' ? 'Tens' : 'Tienes'} <strong>${State.user.extra_days} ${t('extra_days_note')}</strong> ${State.lang === 'en' ? 'for weekend work.' : State.lang === 'ca' ? 'per treball en caps de setmana.' : 'por trabajo en fines de semana.'} ${t('extra_days_auto')}
@@ -1817,6 +1848,7 @@ async function loadEmployees(container) {
                             <th>${t('th_department')}</th>
                             <th>${t('th_role')}</th>
                             <th>${t('th_total_days')}</th>
+                            <th title="${t('carryover_from')}" style="cursor:help;">🔄 ${t('th_carryover')}</th>
                             <th>${t('used_label')}</th>
                             <th>${t('available_label')}</th>
                             <th>${t('th_actions')}</th>
@@ -1837,8 +1869,14 @@ async function loadEmployees(container) {
                             <td>${esc(u.department)}</td>
                             <td><span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></td>
                             <td style="font-weight:700;text-align:center;">${u.total_days}${u.extra_days > 0 ? `<span style="color:var(--accent-secondary);font-size:0.72rem;display:block;">+${u.extra_days}⭐</span>` : ''}</td>
+                            <td style="text-align:center;">
+                                ${u.carryover_days > 0
+                                    ? `<span style="color:#10B981;font-weight:700;">+${u.carryover_days}</span>`
+                                    : `<span style="color:var(--text-dim);">—</span>`}
+                                <button class="btn btn-secondary btn-sm" style="margin-left:4px;padding:2px 6px;font-size:0.7rem;" onclick="openEditCarryoverModal(${u.id},'${esc(u.full_name)}',${u.carryover_days||0})" title="${t('edit_carryover')}">✏️</button>
+                            </td>
                             <td style="color:var(--color-info);font-weight:600;text-align:center;">${u.days_used}</td>
-                            <td style="color:var(--color-success);font-weight:600;text-align:center;">${u.days_remaining + (u.extra_days || 0)}</td>
+                            <td style="color:var(--color-success);font-weight:600;text-align:center;">${u.allocated_days - u.days_used + (u.extra_days || 0)}</td>
                             <td style="white-space:nowrap;">
                                 <div class="action-btns">
                                     <button class="btn btn-secondary btn-sm" onclick="openEditUserModal(${u.id})">✏️</button>
@@ -2968,6 +3006,41 @@ window.deleteUser = async function(userId) {
     }
 };
 
+window.openEditCarryoverModal = function(userId, userName, currentCarryover) {
+    const year = new Date().getFullYear();
+    openModal(`
+    <div class="modal" style="max-width:400px;">
+        <div class="modal-header">
+            <h3>🔄 ${t('edit_carryover')}</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:16px;">${esc(userName)} · ${t('carryover_from')} (${year})</p>
+            <div class="form-group">
+                <label>${t('carryover_days')} ${year}</label>
+                <input type="number" class="form-input" id="carryoverInput" value="${currentCarryover}" min="0" max="365">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">${t('cancel')}</button>
+            <button class="btn btn-primary" onclick="saveCarryover(${userId},${year})">💾 ${t('save_changes')}</button>
+        </div>
+    </div>`);
+};
+
+window.saveCarryover = async function(userId, year) {
+    const days = parseInt(document.getElementById('carryoverInput').value) || 0;
+    try {
+        await api('/api/balances', {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId, year, vacation_type: 'vacaciones', carried_over: days })
+        });
+        closeModal();
+        showToast(t('carryover_days') + ' ' + t('profile_updated').toLowerCase(), 'success');
+        renderPage();
+    } catch(err) { showToast(err.message, 'error'); }
+};
+
 window.openNewHolidayModal = function() {
     openModal(`
     <div class="modal">
@@ -3118,6 +3191,27 @@ async function loadSettings(container) {
                 <button class="btn btn-primary" onclick="savePasswordSettings()">${t('change_password')}</button>
             </div>
         </div>
+
+        ${u.role === 'admin' ? `
+        <div class="panel" style="margin-top:var(--space-lg);">
+            <div class="panel-header">
+                <h2>📅 ${t('close_year_title')}</h2>
+            </div>
+            <div class="panel-body">
+                <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:16px;">${t('close_year_subtitle')}</p>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <div>
+                        <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:4px;">${t('year_to_close')}</label>
+                        <select class="form-select" id="closeYearSelect" style="width:110px;">
+                            ${[new Date().getFullYear()-1, new Date().getFullYear(), new Date().getFullYear()+1]
+                                .map(y=>`<option value="${y}" ${y===new Date().getFullYear()-1?'selected':''}>${y}</option>`).join('')}
+                        </select>
+                    </div>
+                    <button class="btn btn-secondary" style="margin-top:18px;" onclick="closeYearPreview()">🔍 ${t('preview_btn')}</button>
+                </div>
+                <div id="closeYearResults" style="margin-top:16px;"></div>
+            </div>
+        </div>` : ''}
     </div>`;
 }
 
@@ -3188,6 +3282,60 @@ window.setLanguage = function(lang) {
     showToast(t('lang_changed'), 'success');
     renderApp();
     navigateTo('settings');
+};
+
+window.closeYearPreview = async function() {
+    const sel = document.getElementById('closeYearSelect');
+    if (!sel) return;
+    const year = parseInt(sel.value);
+    const resultsDiv = document.getElementById('closeYearResults');
+    resultsDiv.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">Cargando...</div>`;
+    try {
+        const res = await api(`/api/close-year?year=${year}`);
+        const totalCarryover = res.results.reduce((s, r) => s + r.carryover, 0);
+        resultsDiv.innerHTML = `
+        <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;">
+            ${t('year_to_close')}: <strong>${year}</strong> → arrastre a <strong>${res.next_year}</strong> · Total a trasladar: <strong>${totalCarryover} días</strong>
+        </div>
+        <div style="overflow-x:auto;margin-bottom:12px;">
+        <table class="data-table" style="font-size:0.82rem;">
+            <thead><tr>
+                <th>${t('th_employee')}</th>
+                <th>${t('th_department')}</th>
+                <th>${t('th_allocation')}</th>
+                <th>${t('used_label')}</th>
+                <th>${t('th_remaining')}</th>
+                <th style="color:#10B981;">🔄 ${t('th_carryover')} → ${res.next_year}</th>
+            </tr></thead>
+            <tbody>
+                ${res.results.map(r => `<tr>
+                    <td style="font-weight:600;">${esc(r.user_name)}</td>
+                    <td style="color:var(--text-muted);">${esc(r.department)}</td>
+                    <td style="text-align:center;">${r.allocation}</td>
+                    <td style="text-align:center;color:var(--color-info);">${r.days_used}</td>
+                    <td style="text-align:center;${r.remaining < 0 ? 'color:var(--color-danger);' : ''}">${r.remaining}</td>
+                    <td style="text-align:center;font-weight:700;color:${r.carryover > 0 ? '#10B981' : 'var(--text-dim)'};">${r.carryover > 0 ? '+' + r.carryover : '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>
+        </div>
+        <button class="btn btn-primary" onclick="executeCloseYear(${year},${res.next_year})">
+            📅 ${t('execute_close')} ${year} → ${res.next_year}
+        </button>`;
+    } catch(err) { resultsDiv.innerHTML = `<div style="color:var(--color-danger);">${err.message}</div>`; }
+};
+
+window.executeCloseYear = async function(year, nextYear) {
+    const msg = t('close_year_confirm').replace('{y}', year).replace('{n}', nextYear);
+    if (!confirm(msg)) return;
+    const resultsDiv = document.getElementById('closeYearResults');
+    try {
+        const res = await api('/api/close-year', { method: 'POST', body: JSON.stringify({ year }) });
+        showToast(`${t('close_year_done')} ${year}`, 'success');
+        resultsDiv.innerHTML = `<div style="padding:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-sm);color:#10B981;font-size:0.88rem;">
+            ✅ ${t('close_year_done')} ${year}. Los días arrastrados ya están disponibles en ${nextYear}.
+        </div>`;
+    } catch(err) { showToast(err.message, 'error'); }
 };
 
 // ─────────────────────────────────────────────
