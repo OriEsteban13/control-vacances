@@ -81,6 +81,21 @@ const _tr = {
         bulk_approve_btn: 'Aprobar seleccionadas', export_csv: 'Exportar CSV',
         filter_all: 'Todas', filter_pending_label: 'Pendientes', filter_approved_label: 'Aprobadas', filter_rejected_label: 'Rechazadas', filter_cancellations: 'Cancelaciones',
         team_subtitle: 'Estado de vacaciones de tu equipo', used_label: 'Usados', available_label: 'Disponibles', pending_label: 'Pendientes',
+        employees_title: 'Gestión de Empleados', employees_subtitle: 'Administra empleados y asignación de días',
+        new_employee: 'Nuevo Empleado', company_identity: 'Identidad de Empresa', company_name_label: 'Nombre de la empresa',
+        th_email: 'Email', th_department: 'Departamento', th_role: 'Rol', th_total_days: 'Días Totales',
+        holidays_title: 'Festivos', holidays_subtitle: 'Gestiona los días festivos oficiales', new_holiday: '+ Nuevo Festivo',
+        no_holidays: 'Sin festivos', no_holidays_hint: 'Añade los días festivos del año',
+        depts_title: 'Configuración de Departamentos', depts_subtitle: 'Gestiona las áreas de la empresa y sus reglas de vacaciones',
+        new_department: 'Nuevo Departamento', th_name: 'Nombre', th_description: 'Descripción',
+        th_max_sim: 'Máx. Simultáneos', th_min_adv: 'Antelación mín.', th_max_cons: 'Máx. consecutivos',
+        days_suffix: 'días', rules_btn: 'Reglas',
+        late_title: 'Control de Retrasos', late_subtitle: 'Registro de entradas fuera de horario',
+        extra_days_title: 'Días Extras', extra_days_subtitle: 'Gestión de días adicionales por trabajo en fines de semana',
+        req_history: 'Historial de Solicitudes', personal_cal: 'Calendario Personal',
+        select_employee: 'Selecciona un empleado', employee_not_found: 'Empleado no encontrado',
+        save: 'Guardar', create: 'Crear', edit: 'Editar', delete: 'Eliminar',
+        yes_delete: 'Sí, eliminar', no_cancel: 'No, cancelar',
     },
     en: {
         dashboard: 'Dashboard', calendar: 'Calendar', my_vacations: 'My Vacations',
@@ -122,6 +137,21 @@ const _tr = {
         bulk_approve_btn: 'Approve selected', export_csv: 'Export CSV',
         filter_all: 'All', filter_pending_label: 'Pending', filter_approved_label: 'Approved', filter_rejected_label: 'Rejected', filter_cancellations: 'Cancellations',
         team_subtitle: "Your team's vacation status", used_label: 'Used', available_label: 'Available', pending_label: 'Pending',
+        employees_title: 'Employee Management', employees_subtitle: 'Manage employees and day allocation',
+        new_employee: 'New Employee', company_identity: 'Company Identity', company_name_label: 'Company name',
+        th_email: 'Email', th_department: 'Department', th_role: 'Role', th_total_days: 'Total Days',
+        holidays_title: 'Public Holidays', holidays_subtitle: 'Manage official public holidays', new_holiday: '+ New Holiday',
+        no_holidays: 'No holidays', no_holidays_hint: 'Add the holidays for the year',
+        depts_title: 'Department Settings', depts_subtitle: 'Manage company areas and their vacation rules',
+        new_department: 'New Department', th_name: 'Name', th_description: 'Description',
+        th_max_sim: 'Max. Simultaneous', th_min_adv: 'Min. advance', th_max_cons: 'Max. consecutive',
+        days_suffix: 'days', rules_btn: 'Rules',
+        late_title: 'Late Arrivals Log', late_subtitle: 'Record of late check-ins',
+        extra_days_title: 'Extra Days', extra_days_subtitle: 'Manage additional days for weekend work',
+        req_history: 'Request History', personal_cal: 'Personal Calendar',
+        select_employee: 'Select an employee', employee_not_found: 'Employee not found',
+        save: 'Save', create: 'Create', edit: 'Edit', delete: 'Delete',
+        yes_delete: 'Yes, delete', no_cancel: 'No, cancel',
     },
     ca: {
         dashboard: 'Tauler', calendar: 'Calendari', my_vacations: 'Les meves vacances',
@@ -163,6 +193,21 @@ const _tr = {
         bulk_approve_btn: 'Aprovar seleccionades', export_csv: 'Exportar CSV',
         filter_all: 'Totes', filter_pending_label: 'Pendents', filter_approved_label: 'Aprovades', filter_rejected_label: 'Rebutjades', filter_cancellations: "Cancel·lacions",
         team_subtitle: "Estat de vacances de l'equip", used_label: 'Usats', available_label: 'Disponibles', pending_label: 'Pendents',
+        employees_title: "Gestió d'Empleats", employees_subtitle: 'Administra empleats i assignació de dies',
+        new_employee: 'Nou Empleat', company_identity: "Identitat d'Empresa", company_name_label: "Nom de l'empresa",
+        th_email: 'Email', th_department: 'Departament', th_role: 'Rol', th_total_days: 'Dies Totals',
+        holidays_title: 'Festius', holidays_subtitle: 'Gestiona els dies festius oficials', new_holiday: '+ Nou Festiu',
+        no_holidays: 'Sense festius', no_holidays_hint: "Afegeix els dies festius de l'any",
+        depts_title: 'Configuració de Departaments', depts_subtitle: "Gestiona les àrees de l'empresa i les seves regles de vacances",
+        new_department: 'Nou Departament', th_name: 'Nom', th_description: 'Descripció',
+        th_max_sim: 'Màx. Simultanis', th_min_adv: 'Antelació mín.', th_max_cons: 'Màx. consecutius',
+        days_suffix: 'dies', rules_btn: 'Regles',
+        late_title: 'Control de Retards', late_subtitle: 'Registre d\'entrades fora d\'horari',
+        extra_days_title: 'Dies Extres', extra_days_subtitle: 'Gestió de dies addicionals per treball en caps de setmana',
+        req_history: "Historial de Sol·licituds", personal_cal: 'Calendari Personal',
+        select_employee: "Selecciona un empleat", employee_not_found: "Empleat no trobat",
+        save: 'Desar', create: 'Crear', edit: 'Editar', delete: 'Eliminar',
+        yes_delete: 'Sí, eliminar', no_cancel: 'No, cancel·lar',
     },
 };
 
@@ -1583,7 +1628,7 @@ window.goToEmployeeDetails = function(userId) {
 
 async function loadEmployeeDetails(container, userId) {
     if (!userId) {
-        container.innerHTML = '<div class="empty-state"><h3>Selecciona un empleado</h3></div>';
+        container.innerHTML = `<div class="empty-state"><h3>${t('select_employee')}</h3></div>`;
         return;
     }
 
@@ -1596,7 +1641,7 @@ async function loadEmployeeDetails(container, userId) {
     const userVacations = allVacations.filter(v => v.user_id === userId);
 
     if (!user) {
-        container.innerHTML = '<div class="empty-state"><h3>Empleado no encontrado</h3></div>';
+        container.innerHTML = `<div class="empty-state"><h3>${t('employee_not_found')}</h3></div>`;
         return;
     }
 
@@ -1656,7 +1701,7 @@ async function loadEmployeeDetails(container, userId) {
         <div class="employee-detail-grid">
             <div class="panel">
                 <div class="panel-header">
-                    <h2>Historial de Solicitudes</h2>
+                    <h2>${t('req_history')}</h2>
                 </div>
                 <div class="panel-body no-padding">
                     ${renderMyVacationsTable(userVacations)}
@@ -1664,7 +1709,7 @@ async function loadEmployeeDetails(container, userId) {
             </div>
             <div class="panel">
                 <div class="panel-header">
-                    <h2>Calendario Personal</h2>
+                    <h2>${t('personal_cal')}</h2>
                     <div class="calendar-nav">
                         <button class="btn btn-secondary btn-icon btn-sm" onclick="changeMonth(-1, true)">◀</button>
                         <span class="month-label" style="font-size: 1rem; min-width: 140px;">${getMonthName(State.calendarMonth)} ${State.calendarYear}</span>
@@ -1726,32 +1771,32 @@ async function loadEmployees(container) {
         <div class="page-header">
             <div class="page-header-actions">
                 <div>
-                    <h1>⚙️ Gestión de Empleados</h1>
-                    <p>Administra empleados y asignación de días</p>
+                    <h1>⚙️ ${t('employees_title')}</h1>
+                    <p>${t('employees_subtitle')}</p>
                 </div>
-                <button class="btn btn-primary" onclick="openNewUserModal()">+ Nuevo Empleado</button>
+                <button class="btn btn-primary" onclick="openNewUserModal()">+ ${t('new_employee')}</button>
             </div>
         </div>
 
         <div class="panel" style="margin-bottom:var(--space-lg);">
             <div class="panel-header">
-                <h2>🏢 Identidad de Empresa</h2>
+                <h2>🏢 ${t('company_identity')}</h2>
             </div>
             <div class="panel-body">
                 <div class="company-settings-row">
-                    <div class="company-logo-area" onclick="document.getElementById('_logoUploadInput').click()" title="Haz clic para cambiar el logo">
+                    <div class="company-logo-area" onclick="document.getElementById('_logoUploadInput').click()">
                         ${logo
                             ? `<img src="${logo}" class="company-logo-preview" alt="Logo">`
                             : `<div class="company-logo-placeholder">🌴</div>`}
-                        <div class="logo-overlay">📷 Cambiar</div>
+                        <div class="logo-overlay">📷 ${State.lang === 'en' ? 'Change' : State.lang === 'ca' ? 'Canviar' : 'Cambiar'}</div>
                         <input type="file" id="_logoUploadInput" accept="image/*" style="display:none" onchange="handleLogoUpload(this)">
                     </div>
                     <div style="flex:1;">
                         <div class="form-group" style="margin-bottom:var(--space-sm);">
-                            <label>Nombre de la empresa</label>
+                            <label>${t('company_name_label')}</label>
                             <div style="display:flex;gap:8px;align-items:center;">
                                 <input type="text" class="form-input" id="_companyNameInput" value="${companyName}" style="max-width:280px;">
-                                <button class="btn btn-primary btn-sm" onclick="saveCompanyName()">Guardar</button>
+                                <button class="btn btn-primary btn-sm" onclick="saveCompanyName()">${t('save')}</button>
                             </div>
                         </div>
                         <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Haz clic en el logo para cambiarlo. El nombre y el logo aparecen en el menú y en la pantalla de inicio de sesión.</p>
@@ -1765,14 +1810,14 @@ async function loadEmployees(container) {
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Empleado</th>
-                            <th>Email</th>
-                            <th>Departamento</th>
-                            <th>Rol</th>
-                            <th>Días Totales</th>
-                            <th>Usados</th>
-                            <th>Disponibles</th>
-                            <th>Acciones</th>
+                            <th>${t('th_employee')}</th>
+                            <th>${t('th_email')}</th>
+                            <th>${t('th_department')}</th>
+                            <th>${t('th_role')}</th>
+                            <th>${t('th_total_days')}</th>
+                            <th>${t('used_label')}</th>
+                            <th>${t('available_label')}</th>
+                            <th>${t('th_actions')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1819,17 +1864,17 @@ async function loadHolidays(container) {
         <div class="page-header">
             <div class="page-header-actions">
                 <div>
-                    <h1>🎉 Festivos</h1>
-                    <p>Gestiona los días festivos oficiales</p>
+                    <h1>🎉 ${t('holidays_title')}</h1>
+                    <p>${t('holidays_subtitle')}</p>
                 </div>
-                <button class="btn btn-primary" onclick="openNewHolidayModal()">+ Nuevo Festivo</button>
+                <button class="btn btn-primary" onclick="openNewHolidayModal()">${t('new_holiday')}</button>
             </div>
         </div>
 
         <div class="panel">
             <div class="panel-body">
                 ${holidays.length === 0 ? 
-                    '<div class="empty-state"><div class="empty-icon">🎉</div><h3>Sin festivos</h3><p>Añade los días festivos del año</p></div>' :
+                    `<div class="empty-state"><div class="empty-icon">🎉</div><h3>${t('no_holidays')}</h3><p>${t('no_holidays_hint')}</p></div>` :
                     `<div class="holiday-list">
                         ${holidays.map(h => `
                         <div class="holiday-item">
@@ -1865,10 +1910,10 @@ async function loadDepartments(container) {
         <div class="page-header">
             <div class="page-header-actions">
                 <div>
-                    <h1>🏢 Configuración de Departamentos</h1>
-                    <p>Gestiona las áreas de la empresa y sus reglas de vacaciones</p>
+                    <h1>🏢 ${t('depts_title')}</h1>
+                    <p>${t('depts_subtitle')}</p>
                 </div>
-                <button class="btn btn-primary" onclick="openNewDeptModal()">+ Nuevo Departamento</button>
+                <button class="btn btn-primary" onclick="openNewDeptModal()">+ ${t('new_department')}</button>
             </div>
         </div>
 
@@ -1877,11 +1922,11 @@ async function loadDepartments(container) {
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Nombre</th>
-                            <th>Descripción</th>
-                            <th>Máx. Simultáneos</th>
-                            <th>Antelación mín.</th>
-                            <th>Máx. consecutivos</th>
+                            <th>${t('th_name')}</th>
+                            <th>${t('th_description')}</th>
+                            <th>${t('th_max_sim')}</th>
+                            <th>${t('th_min_adv')}</th>
+                            <th>${t('th_max_cons')}</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -1893,12 +1938,12 @@ async function loadDepartments(container) {
                             <td style="font-weight: 600;">${esc(d.name)}</td>
                             <td style="color: var(--text-muted);">${esc(d.description) || '—'}</td>
                             <td>${rule?.max_simultaneous ?? '<span style="color:var(--text-dim)">—</span>'}</td>
-                            <td>${rule?.min_advance_days ? rule.min_advance_days + ' días' : '<span style="color:var(--text-dim)">—</span>'}</td>
-                            <td>${rule?.max_consecutive_days ? rule.max_consecutive_days + ' días' : '<span style="color:var(--text-dim)">—</span>'}</td>
+                            <td>${rule?.min_advance_days ? rule.min_advance_days + ' ' + t('days_suffix') : '<span style="color:var(--text-dim)">—</span>'}</td>
+                            <td>${rule?.max_consecutive_days ? rule.max_consecutive_days + ' ' + t('days_suffix') : '<span style="color:var(--text-dim)">—</span>'}</td>
                             <td>
                                 <div class="action-btns">
                                     <button class="btn btn-secondary btn-sm" onclick="openEditDeptModal(${d.id})">✏️</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="openDeptRulesModal('${esc(d.name)}', ${rule ? rule.id : 'null'}, ${JSON.stringify(rule || {}).replace(/"/g,'&quot;')})" title="Configurar reglas">⚙️ Reglas</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="openDeptRulesModal('${esc(d.name)}', ${rule ? rule.id : 'null'}, ${JSON.stringify(rule || {}).replace(/"/g,'&quot;')})">⚙️ ${t('rules_btn')}</button>
                                     <button class="btn btn-danger btn-sm" onclick="deleteDepartment(${d.id})">🗑️</button>
                                 </div>
                             </td>
@@ -2099,8 +2144,8 @@ async function loadLateArrivals(container) {
     <div class="page-enter">
         <div class="page-header">
             <div>
-                <h1>⏰ Control de Retrasos</h1>
-                <p>Monitoreo de puntualidad y ranking de equipo</p>
+                <h1>⏰ ${t('late_title')}</h1>
+                <p>${t('late_subtitle')}</p>
             </div>
         </div>
 
@@ -2250,23 +2295,23 @@ async function loadExtraDays(container) {
             <div class="page-header-actions">
                 <div>
                     <h1>⭐ ${t('extra_days')}</h1>
-                    <p>Días generados por trabajo en fines de semana</p>
+                    <p>${t('extra_days_subtitle')}</p>
                 </div>
-                <button class="btn btn-primary" onclick="openAddExtraDaysModal()">＋ Añadir días extras</button>
+                <button class="btn btn-primary" onclick="openAddExtraDaysModal()">＋ ${State.lang === 'en' ? 'Add extra days' : State.lang === 'ca' ? 'Afegir dies extres' : 'Añadir días extras'}</button>
             </div>
         </div>
 
         <!-- Summary by employee -->
         <div class="panel" style="margin-bottom:var(--space-lg);">
-            <div class="panel-header"><h2>👤 Balance por empleado</h2></div>
+            <div class="panel-header"><h2>👤 ${State.lang === 'en' ? 'Balance by employee' : State.lang === 'ca' ? 'Saldo per empleat' : 'Balance por empleado'}</h2></div>
             <div class="panel-body no-padding">
                 <table class="data-table">
                     <thead><tr>
-                        <th>Empleado</th>
-                        <th>Departamento</th>
-                        <th style="text-align:center;">Días normales disp.</th>
-                        <th style="text-align:center;">Días extras generados</th>
-                        <th style="text-align:center;">Total disponible</th>
+                        <th>${t('th_employee')}</th>
+                        <th>${t('th_department')}</th>
+                        <th style="text-align:center;">${State.lang === 'en' ? 'Normal days avail.' : State.lang === 'ca' ? 'Dies normals disp.' : 'Días normales disp.'}</th>
+                        <th style="text-align:center;">${State.lang === 'en' ? 'Generated extra days' : State.lang === 'ca' ? 'Dies extres generats' : 'Días extras generados'}</th>
+                        <th style="text-align:center;">${State.lang === 'en' ? 'Total available' : State.lang === 'ca' ? 'Total disponible' : 'Total disponible'}</th>
                         <th></th>
                     </tr></thead>
                     <tbody>
@@ -2289,7 +2334,7 @@ async function loadExtraDays(container) {
                                 </td>
                                 <td style="text-align:center;font-weight:700;font-size:1.05rem;color:${totalAvail > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${totalAvail}</td>
                                 <td style="text-align:right;">
-                                    <button class="btn btn-secondary btn-sm" onclick="openAddExtraDaysModal(${u.id})">＋ Añadir</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="openAddExtraDaysModal(${u.id})">＋ ${State.lang === 'en' ? 'Add' : State.lang === 'ca' ? 'Afegir' : 'Añadir'}</button>
                                 </td>
                             </tr>`;
                         }).join('')}
@@ -2301,20 +2346,20 @@ async function loadExtraDays(container) {
         <!-- Full history -->
         <div class="panel">
             <div class="panel-header">
-                <h2>📋 Historial de días extras</h2>
-                <span style="font-size:0.8rem;color:var(--text-muted);">${entries.length} registro(s)</span>
+                <h2>📋 ${State.lang === 'en' ? 'Extra days history' : State.lang === 'ca' ? 'Historial de dies extres' : 'Historial de días extras'}</h2>
+                <span style="font-size:0.8rem;color:var(--text-muted);">${entries.length} ${State.lang === 'en' ? 'record(s)' : State.lang === 'ca' ? 'registre(s)' : 'registro(s)'}</span>
             </div>
             <div class="panel-body no-padding">
             ${entries.length === 0
-                ? '<div class="empty-state" style="padding:32px;"><div class="empty-icon">⭐</div><h3>Sin días extras registrados</h3><p>Usa el botón "Añadir días extras" para registrar trabajo en fines de semana.</p></div>'
+                ? `<div class="empty-state" style="padding:32px;"><div class="empty-icon">⭐</div><h3>${State.lang === 'en' ? 'No extra days recorded' : State.lang === 'ca' ? 'Sense dies extres registrats' : 'Sin días extras registrados'}</h3></div>`
                 : `<table class="data-table">
                     <thead><tr>
-                        <th>Empleado</th>
-                        <th>Días</th>
-                        <th>Descripción / Motivo</th>
-                        <th>Fecha trabajada</th>
-                        <th>Registrado por</th>
-                        <th>Fecha registro</th>
+                        <th>${t('th_employee')}</th>
+                        <th>${t('th_days')}</th>
+                        <th>${State.lang === 'en' ? 'Description / Reason' : State.lang === 'ca' ? 'Descripció / Motiu' : 'Descripción / Motivo'}</th>
+                        <th>${State.lang === 'en' ? 'Work date' : State.lang === 'ca' ? 'Data treballada' : 'Fecha trabajada'}</th>
+                        <th>${State.lang === 'en' ? 'Recorded by' : State.lang === 'ca' ? 'Registrat per' : 'Registrado por'}</th>
+                        <th>${State.lang === 'en' ? 'Record date' : State.lang === 'ca' ? 'Data registre' : 'Fecha registro'}</th>
                         <th></th>
                     </tr></thead>
                     <tbody>
