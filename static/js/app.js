@@ -3292,48 +3292,111 @@ window.closeYearPreview = async function() {
     resultsDiv.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">Cargando...</div>`;
     try {
         const res = await api(`/api/close-year?year=${year}`);
+        window._closeYearData = res.results;
+        window._closeYearMeta = { year, nextYear: res.next_year };
         const totalCarryover = res.results.reduce((s, r) => s + r.carryover, 0);
         resultsDiv.innerHTML = `
-        <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;">
-            ${t('year_to_close')}: <strong>${year}</strong> → arrastre a <strong>${res.next_year}</strong> · Total a trasladar: <strong>${totalCarryover} días</strong>
+        <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px;">
+            ${t('year_to_close')}: <strong>${year}</strong> → arrastre a <strong>${res.next_year}</strong>
+            · Total a trasladar: <strong id="closeYearTotal" style="color:#10B981;">${totalCarryover}</strong> días
+        </div>
+        <div style="padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--color-warning);margin-bottom:12px;">
+            ✏️ <strong>Edita los días usados</strong> si el sistema no tiene las solicitudes históricas de ${year}. Los días arrastrados se recalculan automáticamente.
         </div>
         <div style="overflow-x:auto;margin-bottom:12px;">
         <table class="data-table" style="font-size:0.82rem;">
             <thead><tr>
                 <th>${t('th_employee')}</th>
                 <th>${t('th_department')}</th>
-                <th>${t('th_allocation')}</th>
-                <th>${t('used_label')}</th>
-                <th>${t('th_remaining')}</th>
-                <th style="color:#10B981;">🔄 ${t('th_carryover')} → ${res.next_year}</th>
+                <th style="text-align:center;">${t('th_allocation')}</th>
+                <th style="text-align:center;">✏️ ${t('used_label')} ${year}</th>
+                <th style="text-align:center;">${t('th_remaining')}</th>
+                <th style="text-align:center;color:#10B981;">🔄 ${t('th_carryover')} → ${res.next_year}</th>
             </tr></thead>
             <tbody>
-                ${res.results.map(r => `<tr>
+                ${res.results.map(r => `<tr id="close_row_${r.user_id}">
                     <td style="font-weight:600;">${esc(r.user_name)}</td>
                     <td style="color:var(--text-muted);">${esc(r.department)}</td>
                     <td style="text-align:center;">${r.allocation}</td>
-                    <td style="text-align:center;color:var(--color-info);">${r.days_used}</td>
-                    <td style="text-align:center;${r.remaining < 0 ? 'color:var(--color-danger);' : ''}">${r.remaining}</td>
-                    <td style="text-align:center;font-weight:700;color:${r.carryover > 0 ? '#10B981' : 'var(--text-dim)'};">${r.carryover > 0 ? '+' + r.carryover : '—'}</td>
+                    <td style="text-align:center;">
+                        <input type="number" id="close_used_${r.user_id}"
+                            value="${r.days_used}" min="0" max="${r.allocation}"
+                            oninput="updateCloseYearRow(${r.user_id},${r.allocation})"
+                            style="width:64px;text-align:center;padding:4px 6px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-glass);color:var(--text-primary);font-size:0.82rem;">
+                    </td>
+                    <td id="close_rem_${r.user_id}" style="text-align:center;${r.remaining < 0 ? 'color:var(--color-danger);' : ''}">${r.remaining}</td>
+                    <td id="close_carry_${r.user_id}" style="text-align:center;font-weight:700;color:${r.carryover > 0 ? '#10B981' : 'var(--text-dim)'};">${r.carryover > 0 ? '+' + r.carryover : '—'}</td>
                 </tr>`).join('')}
             </tbody>
         </table>
         </div>
-        <button class="btn btn-primary" onclick="executeCloseYear(${year},${res.next_year})">
+        <button class="btn btn-primary" onclick="executeCloseYear()">
             📅 ${t('execute_close')} ${year} → ${res.next_year}
         </button>`;
     } catch(err) { resultsDiv.innerHTML = `<div style="color:var(--color-danger);">${err.message}</div>`; }
 };
 
-window.executeCloseYear = async function(year, nextYear) {
+window.updateCloseYearRow = function(userId, allocation) {
+    const input = document.getElementById(`close_used_${userId}`);
+    const used = Math.max(0, parseInt(input.value) || 0);
+    const remaining = allocation - used;
+    const carryover = Math.max(0, remaining);
+    const remEl = document.getElementById(`close_rem_${userId}`);
+    const carryEl = document.getElementById(`close_carry_${userId}`);
+    remEl.textContent = remaining;
+    remEl.style.color = remaining < 0 ? 'var(--color-danger)' : '';
+    carryEl.textContent = carryover > 0 ? `+${carryover}` : '—';
+    carryEl.style.color = carryover > 0 ? '#10B981' : 'var(--text-dim)';
+    // Update grand total
+    const data = window._closeYearData || [];
+    let total = 0;
+    for (const r of data) {
+        const inp = document.getElementById(`close_used_${r.user_id}`);
+        if (inp) total += Math.max(0, r.allocation - Math.max(0, parseInt(inp.value) || 0));
+    }
+    const totalEl = document.getElementById('closeYearTotal');
+    if (totalEl) totalEl.textContent = total;
+};
+
+window.executeCloseYear = async function() {
+    const meta = window._closeYearMeta;
+    const data = window._closeYearData || [];
+    if (!meta) return;
+    const { year, nextYear } = meta;
     const msg = t('close_year_confirm').replace('{y}', year).replace('{n}', nextYear);
     if (!confirm(msg)) return;
+    // Collect overrides from editable inputs
+    const overrides = {};
+    for (const r of data) {
+        const inp = document.getElementById(`close_used_${r.user_id}`);
+        if (inp) overrides[String(r.user_id)] = Math.max(0, parseInt(inp.value) || 0);
+    }
     const resultsDiv = document.getElementById('closeYearResults');
     try {
-        const res = await api('/api/close-year', { method: 'POST', body: JSON.stringify({ year }) });
+        const res = await api('/api/close-year', { method: 'POST', body: JSON.stringify({ year, overrides }) });
+        const totalCarried = res.results.reduce((s, r) => s + r.carryover, 0);
         showToast(`${t('close_year_done')} ${year}`, 'success');
-        resultsDiv.innerHTML = `<div style="padding:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-sm);color:#10B981;font-size:0.88rem;">
-            ✅ ${t('close_year_done')} ${year}. Los días arrastrados ya están disponibles en ${nextYear}.
+        resultsDiv.innerHTML = `
+        <div style="padding:14px 16px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-sm);color:#10B981;font-size:0.88rem;">
+            ✅ ${t('close_year_done')} ${year}. <strong>${totalCarried} días</strong> arrastrados ya disponibles en ${nextYear}.
+        </div>
+        <div style="overflow-x:auto;margin-top:12px;">
+        <table class="data-table" style="font-size:0.82rem;">
+            <thead><tr>
+                <th>${t('th_employee')}</th>
+                <th style="text-align:center;">${t('th_allocation')}</th>
+                <th style="text-align:center;">${t('used_label')}</th>
+                <th style="text-align:center;color:#10B981;">🔄 Arrastrado a ${nextYear}</th>
+            </tr></thead>
+            <tbody>
+                ${res.results.map(r => `<tr>
+                    <td style="font-weight:600;">${esc(r.user_name)}</td>
+                    <td style="text-align:center;">${r.allocation}</td>
+                    <td style="text-align:center;">${r.days_used}</td>
+                    <td style="text-align:center;font-weight:700;color:${r.carryover > 0 ? '#10B981' : 'var(--text-dim)'};">${r.carryover > 0 ? '+' + r.carryover : '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>
         </div>`;
     } catch(err) { showToast(err.message, 'error'); }
 };

@@ -2204,8 +2204,16 @@ def close_year():
             'carryover': carryover,
         })
     if request.method == 'POST':
+        overrides = data.get('overrides', {})
         user_map = {u.id: u for u in users}
         for r in results:
+            # Apply manual override for days_used if provided
+            override_key = str(r['user_id'])
+            if override_key in overrides:
+                override_used = max(0, int(overrides[override_key]))
+                r['days_used'] = override_used
+                r['remaining'] = r['allocation'] - override_used
+                r['carryover'] = max(0, r['remaining'])
             balance = VacationBalance.query.filter_by(
                 user_id=r['user_id'], year=next_year, vacation_type='vacaciones'
             ).first()
