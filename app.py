@@ -503,6 +503,7 @@ class Event(db.Model):
     notes = db.Column(db.Text, default='')
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='active')
 
     assignments = db.relationship('EventAssignment', backref='event', lazy=True, cascade='all, delete-orphan')
     creator = db.relationship('User', foreign_keys=[created_by])
@@ -528,6 +529,7 @@ class Event(db.Model):
             'assignments': [a.to_dict() for a in self.assignments],
             'created_by': self.created_by,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'status': self.status or 'active',
         }
 
 
@@ -1947,6 +1949,24 @@ def delete_event(event_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/events/<int:event_id>/status', methods=['PATCH'])
+@login_required
+def update_event_status(event_id):
+    if current_user.role not in ('admin', 'manager'):
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    event = db.session.get(Event, event_id)
+    if not event:
+        return jsonify({'success': False, 'error': 'Evento no encontrado'}), 404
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    if new_status not in ('active', 'done'):
+        return jsonify({'success': False, 'error': 'Estado inválido'}), 400
+    event.status = new_status
+    db.session.commit()
+    log_audit('update_event_status', 'event', event_id, f"status={new_status}")
+    return jsonify({'success': True, 'event': event.to_dict()})
+
+
 # ─────────────────────────────────────────────
 # API Routes — Sick Leaves
 # ─────────────────────────────────────────────
@@ -2423,6 +2443,7 @@ def _run_migrations(db):
     inspector = inspect(db.engine)
     migrations = [
         ('client', 'logo_data', 'TEXT'),
+        ('event', 'status', "VARCHAR(20) DEFAULT 'active'"),
     ]
     with db.engine.connect() as conn:
         for table, column, col_type in migrations:

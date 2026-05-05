@@ -33,6 +33,7 @@ const State = {
     eventsFilterClient: null,
     eventsFilterTypology: null,
     eventsFilterUser: null,
+    eventsFilterStatus: null,
     selectedClientId: null,
     lang: localStorage.getItem('lang') || 'es',
 };
@@ -3245,8 +3246,9 @@ function typologyBadge(typ) {
 }
 
 function eventStatusBadge(ev) {
+    if (ev.status === 'done') return `<span style="background:rgba(16,185,129,0.12);color:#10B981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">✅ Realizado</span>`;
     const today = new Date().toISOString().split('T')[0];
-    if (ev.end_date < today) return `<span style="background:var(--color-success-bg);color:var(--color-success);border:1px solid var(--color-success-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">✅ Finalizado</span>`;
+    if (ev.end_date < today) return `<span style="background:var(--color-success-bg);color:var(--color-success);border:1px solid var(--color-success-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">⏹ Pasado</span>`;
     if (ev.start_date <= today) return `<span style="background:var(--color-warning-bg);color:var(--color-warning);border:1px solid var(--color-warning-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">🔴 En curso</span>`;
     return `<span style="background:var(--color-info-bg);color:var(--color-info);border:1px solid var(--color-info-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">📅 Próximo</span>`;
 }
@@ -3267,22 +3269,32 @@ function eventsFilterBar(clients, users, showEmployee = true) {
             `<option value="${u.id}" ${String(State.eventsFilterUser) === String(u.id) ? 'selected' : ''}>${esc(u.full_name)}</option>`
           ).join('')
         : '';
+    const statusChips = [
+        { val: null,     label: 'Todos' },
+        { val: 'active', label: '🔵 Activos' },
+        { val: 'done',   label: '✅ Realizados' },
+    ].map(s => {
+        const active = State.eventsFilterStatus === s.val;
+        return `<button onclick="setEventsFilter('status','${s.val}')" style="padding:4px 12px;border-radius:20px;border:1px solid ${active ? 'var(--accent-primary)' : 'var(--border-color)'};background:${active ? 'var(--accent-primary)' : 'transparent'};color:${active ? '#fff' : 'var(--text-secondary)'};font-size:0.78rem;font-weight:600;cursor:pointer;white-space:nowrap;">${s.label}</button>`;
+    }).join('');
     return `
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:var(--space-lg);padding:var(--space-md);background:var(--bg-glass);border-radius:var(--radius-md);border:1px solid var(--border-color);">
         <span style="font-size:0.8rem;color:var(--text-muted);font-weight:600;">FILTROS:</span>
         <select class="form-select" style="width:200px;" onchange="setEventsFilter('client', this.value)">${clientOpts}</select>
         <select class="form-select" style="width:190px;" onchange="setEventsFilter('typology', this.value)">${typOpts}</select>
         ${showEmployee ? `<select class="form-select" style="width:200px;" onchange="setEventsFilter('user', this.value)">${userOpts}</select>` : ''}
-        ${(State.eventsFilterClient || State.eventsFilterTypology || State.eventsFilterUser)
+        <div style="display:flex;gap:6px;align-items:center;">${statusChips}</div>
+        ${(State.eventsFilterClient || State.eventsFilterTypology || State.eventsFilterUser || State.eventsFilterStatus)
             ? `<button class="btn btn-secondary btn-sm" onclick="clearEventsFilters()">✕ Limpiar filtros</button>` : ''}
     </div>`;
 }
 
 window.setEventsFilter = function(type, value) {
-    const v = value === '' ? null : (isNaN(value) ? value : parseInt(value));
+    const v = value === '' || value === 'null' ? null : (isNaN(value) ? value : parseInt(value));
     if (type === 'client')   State.eventsFilterClient   = v;
-    if (type === 'typology') State.eventsFilterTypology = typeof v === 'string' ? v : null;
+    if (type === 'typology') State.eventsFilterTypology = typeof v === 'string' && v !== 'null' ? v : null;
     if (type === 'user')     State.eventsFilterUser     = v;
+    if (type === 'status')   State.eventsFilterStatus   = (value === 'null' || value === '') ? null : value;
     renderPage();
 };
 
@@ -3290,6 +3302,7 @@ window.clearEventsFilters = function() {
     State.eventsFilterClient = null;
     State.eventsFilterTypology = null;
     State.eventsFilterUser = null;
+    State.eventsFilterStatus = null;
     renderPage();
 };
 
@@ -3298,6 +3311,7 @@ function applyEventsFilters(events) {
         if (State.eventsFilterClient && e.client_id !== State.eventsFilterClient) return false;
         if (State.eventsFilterTypology && e.client_typology !== State.eventsFilterTypology) return false;
         if (State.eventsFilterUser && !e.assignments.some(a => a.user_id === State.eventsFilterUser)) return false;
+        if (State.eventsFilterStatus && (e.status || 'active') !== State.eventsFilterStatus) return false;
         return true;
     });
 }
@@ -3352,6 +3366,13 @@ async function loadEvents(container) {
         }
     }
 
+    // Completion stats (from ALL filtered events regardless of date)
+    const doneEvents = filtered.filter(e => (e.status || 'active') === 'done');
+    const activeEvents = filtered.filter(e => (e.status || 'active') !== 'done');
+    const doneCount = doneEvents.length;
+    const totalCount = filtered.length;
+    const donePct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
     container.innerHTML = `
     <div class="page-enter">
         <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -3376,6 +3397,48 @@ async function loadEvents(container) {
             <div class="stat-card info"><div class="stat-icon">🗂️</div><div class="stat-value">${filtered.length}</div><div class="stat-label">Total ${year}</div></div>
             <div class="stat-card success"><div class="stat-icon">🏢</div><div class="stat-value">${Object.keys(byClientFiltered).length}</div><div class="stat-label">Clientes</div></div>
             <div class="stat-card warning"><div class="stat-icon">👤</div><div class="stat-value">${filtered.reduce((s,e)=>s+e.assignments.length*e.duration_days,0)}</div><div class="stat-label">Días-Persona</div></div>
+        </div>
+
+        <!-- Completion progress panel -->
+        <div class="panel" style="margin-bottom:var(--space-lg);">
+            <div class="panel-header">
+                <h2>📊 Estado de Realización</h2>
+                <div style="display:flex;gap:8px;">
+                    <span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:rgba(16,185,129,0.12);color:#10B981;font-weight:600;">✅ ${doneCount} realizados</span>
+                    <span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:rgba(99,102,241,0.1);color:var(--accent-primary);font-weight:600;">🔵 ${activeEvents.length} activos</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:var(--space-lg);">
+                    <div>
+                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--text-muted);margin-bottom:6px;">
+                            <span>Progreso de realización ${year}</span>
+                            <span style="font-weight:700;color:${donePct >= 80 ? '#10B981' : donePct >= 50 ? 'var(--color-warning)' : 'var(--text-secondary)'};">${donePct}%</span>
+                        </div>
+                        <div style="height:14px;background:var(--bg-glass);border-radius:7px;overflow:hidden;border:1px solid var(--border-color);">
+                            <div style="height:100%;width:${donePct}%;background:linear-gradient(90deg,#10B981,#34D399);border-radius:7px;transition:width 0.4s ease;"></div>
+                        </div>
+                        <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;">
+                            ${doneEvents.slice(0,5).map(e => `
+                                <div style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--text-muted);">
+                                    <span style="color:#10B981;">✅</span>
+                                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;" title="${esc(e.name)}">${esc(e.name)}</span>
+                                </div>`).join('')}
+                            ${doneCount > 5 ? `<div style="font-size:0.78rem;color:var(--text-muted);">+${doneCount - 5} más</div>` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                        <svg width="90" height="90" viewBox="0 0 90 90">
+                            <circle cx="45" cy="45" r="38" fill="none" stroke="var(--border-color)" stroke-width="10"/>
+                            <circle cx="45" cy="45" r="38" fill="none" stroke="#10B981" stroke-width="10"
+                                stroke-dasharray="${2 * Math.PI * 38}" stroke-dashoffset="${2 * Math.PI * 38 * (1 - donePct / 100)}"
+                                stroke-linecap="round" transform="rotate(-90 45 45)" style="transition:stroke-dashoffset 0.4s;"/>
+                            <text x="45" y="49" text-anchor="middle" font-size="17" font-weight="700" fill="var(--text-primary)">${donePct}%</text>
+                        </svg>
+                        <div style="font-size:0.72rem;color:var(--text-muted);text-align:center;">${doneCount}/${totalCount}<br>realizados</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Próximos eventos -->
@@ -3594,13 +3657,22 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
 }
 
 function renderEventRow(e, isAdmin) {
+    const isDone = (e.status || 'active') === 'done';
+    const canToggle = ['admin', 'manager'].includes(State.user.role);
+    const mutedStyle = isDone ? 'opacity:0.55;' : '';
     const team = e.assignments.map(a =>
         `<span title="${esc(a.employee_name)}" style="display:inline-block;margin-right:2px;">${renderAvatarEl(a.employee_avatar_color, a.employee_initials, a.employee_avatar_image, 24)}</span>`
     ).join('');
     const clientDot = e.client_color
         ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${e.client_color};margin-right:5px;"></span>`
         : '';
-    return `<tr>
+    const toggleBtn = canToggle
+        ? `<button class="btn btn-sm" title="${isDone ? 'Marcar como activo' : 'Marcar como realizado'}"
+            onclick="toggleEventStatus(${e.id},'${e.status || 'active'}')"
+            style="margin-left:4px;background:${isDone ? 'rgba(16,185,129,0.15)' : 'rgba(99,102,241,0.1)'};border:1px solid ${isDone ? 'rgba(16,185,129,0.4)' : 'rgba(99,102,241,0.3)'};color:${isDone ? '#10B981' : 'var(--accent-primary)'};">
+            ${isDone ? '↩' : '✅'}
+           </button>` : '';
+    return `<tr style="${mutedStyle}${isDone ? 'background:rgba(0,0,0,0.03);' : ''}">
         <td><strong>${esc(e.name)}</strong>${e.location ? `<div style="font-size:0.75rem;color:var(--text-muted);">📍 ${esc(e.location)}</div>` : ''}</td>
         <td>${clientDot}${esc(e.client_name || '—')}</td>
         <td>${e.client_typology ? typologyBadge(e.client_typology) : '—'}</td>
@@ -3608,16 +3680,27 @@ function renderEventRow(e, isAdmin) {
         <td style="text-align:center;">${e.duration_days}</td>
         <td>${team || '<span style="color:var(--text-muted);font-size:0.8rem;">Sin asignar</span>'}</td>
         <td>${eventStatusBadge(e)}</td>
-        ${isAdmin ? `<td>
+        ${isAdmin ? `<td style="white-space:nowrap;">
             <button class="btn btn-secondary btn-sm" onclick="openEditEventModal(${e.id})" title="Editar">✏️</button>
+            ${toggleBtn}
             <button class="btn btn-danger btn-sm" onclick="deleteEvent(${e.id})" title="Eliminar" style="margin-left:4px;">🗑️</button>
-        </td>` : ''}
+        </td>` : (canToggle ? `<td>${toggleBtn}</td>` : '')}
     </tr>`;
 }
 
 window.changeEventsYear = function(y) {
     State.eventsYear = parseInt(y);
     renderPage();
+};
+
+window.toggleEventStatus = async function(eventId, currentStatus) {
+    const newStatus = currentStatus === 'done' ? 'active' : 'done';
+    const res = await api(`/api/events/${eventId}/status`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+    if (res.success) {
+        const idx = State.events.findIndex(e => e.id === eventId);
+        if (idx !== -1) State.events[idx] = res.event;
+        renderPage();
+    }
 };
 
 function eventFormHTML(clients, users, ev) {
@@ -3861,9 +3944,11 @@ async function loadEventsCalendar(container) {
             const bleft = !isStart ? 'border-left:2px dashed rgba(255,255,255,0.4);' : '';
             const bright= !isEnd   ? 'border-right:2px dashed rgba(255,255,255,0.4);' : '';
             const names = (e.assignments||[]).map(a=>a.employee_name||'').filter(Boolean);
-            const tip   = `${e.name}${e.location?' · '+e.location:''}${names.length?' · '+names.join(', '):''}`;
+            const tip   = `${e.name}${e.location?' · '+e.location:''}${names.length?' · '+names.join(', '):''}${(e.status||'active')==='done'?' ✅ Realizado':''}`;
             const label = names.length ? `${e.name} · ${names.join(', ')}` : e.name;
-            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;" title="${esc(tip)}">${isStart?`<span class="evt-bar-label">${esc(label)}</span>`:''}</div>`;
+            const doneStyle = (e.status||'active')==='done' ? 'opacity:0.5;filter:grayscale(0.4);' : '';
+            const doneLabel = (e.status||'active')==='done' ? '✅ ' : '';
+            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;${doneStyle}" title="${esc(tip)}">${isStart?`<span class="evt-bar-label">${doneLabel}${esc(label)}</span>`:''}</div>`;
         }).join('');
 
         weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
@@ -4034,7 +4119,8 @@ function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, p
             const br=`${isStart?'4px':'2px'} ${isEnd?'4px':'2px'} ${isEnd?'4px':'2px'} ${isStart?'4px':'2px'}`;
             const bleft=!isStart?'border-left:2px dashed rgba(255,255,255,0.4);':'';
             const bright=!isEnd?'border-right:2px dashed rgba(255,255,255,0.4);':'';
-            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;" title="${esc(e.name)}">${isStart&&!compact?`<span class="evt-bar-label" style="font-size:.7rem;">${esc(e.name)}</span>`:''}</div>`;
+            const doneStyle2 = (e.status||'active')==='done' ? 'opacity:0.5;filter:grayscale(0.4);' : '';
+            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;${doneStyle2}" title="${esc(e.name)}${(e.status||'active')==='done'?' ✅':''}">${isStart&&!compact?`<span class="evt-bar-label" style="font-size:.7rem;">${(e.status||'active')==='done'?'✅ ':''}${esc(e.name)}</span>`:''}</div>`;
         }).join('');
         weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
     }
@@ -4070,6 +4156,8 @@ window.openEventDetailModal = async function(eventId) {
     }
     if (!ev) return;
     const canEdit = true;
+    const canToggle = ['admin', 'manager'].includes(State.user.role);
+    const isDone = (ev.status || 'active') === 'done';
     const fmt = s => s ? formatDate(s) : '—';
     const team = (ev.assignments||[]).map(a=>`
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
@@ -4077,15 +4165,18 @@ window.openEventDetailModal = async function(eventId) {
             <span style="font-size:.85rem;">${esc(a.employee_name||'')}</span>
         </div>`).join('') || `<span style="color:var(--text-muted);font-size:.85rem;">${State.lang==='en'?'No team assigned':State.lang==='ca'?"Sense equip assignat":'Sin equipo asignado'}</span>`;
     const dLabel = State.lang==='en'?'Days':State.lang==='ca'?'Dies':'Días';
-    const clLabel = State.lang==='en'?'Client':State.lang==='ca'?'Client':'Cliente';
     const teLabel = State.lang==='en'?'Team':State.lang==='ca'?'Equip':'Equipo';
     const editLabel = State.lang==='en'?'Edit event':State.lang==='ca'?"Editar event":'Editar evento';
+    const toggleLabel = isDone
+        ? (State.lang==='en'?'Mark as active':State.lang==='ca'?'Marcar com actiu':'Marcar como activo')
+        : (State.lang==='en'?'Mark as done':State.lang==='ca'?'Marcar com realitzat':'Marcar como realizado');
     openModal(`
     <div class="modal" style="max-width:480px;">
         <div class="modal-header" style="border-left:4px solid ${ev.client_color||'#6C5CE7'};padding-left:12px;">
             <div>
-                <h3 style="margin:0;">${esc(ev.name)}</h3>
+                <h3 style="margin:0;${isDone?'opacity:0.7;':''}">${isDone?'✅ ':''}${esc(ev.name)}</h3>
                 ${ev.client_name?`<div style="font-size:.82rem;color:var(--text-muted);margin-top:2px;">${esc(ev.client_name)} ${typologyBadge(ev.client_typology||'')}</div>`:''}
+                <div style="margin-top:6px;">${eventStatusBadge(ev)}</div>
             </div>
             <button class="modal-close" onclick="closeModal()">✕</button>
         </div>
@@ -4108,11 +4199,14 @@ window.openEventDetailModal = async function(eventId) {
                 ${team}
             </div>
         </div>
-        ${canEdit ? `
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal()">${t('cancel')}</button>
-            <button class="btn btn-primary" onclick="closeModal();openEditEventModal(${ev.id})">✏️ ${editLabel}</button>
-        </div>` : `<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">${t('cancel')}</button></div>`}
+            ${canToggle ? `<button class="btn btn-sm" onclick="closeModal();toggleEventStatus(${ev.id},'${ev.status||'active'}')"
+                style="background:${isDone?'rgba(99,102,241,0.1)':'rgba(16,185,129,0.12)'};border:1px solid ${isDone?'rgba(99,102,241,0.3)':'rgba(16,185,129,0.3)'};color:${isDone?'var(--accent-primary)':'#10B981'};">
+                ${isDone ? '↩' : '✅'} ${toggleLabel}
+            </button>` : ''}
+            ${canEdit ? `<button class="btn btn-primary" onclick="closeModal();openEditEventModal(${ev.id})">✏️ ${editLabel}</button>` : ''}
+        </div>
     </div>`);
 };
 
