@@ -36,6 +36,7 @@ const State = {
     eventsFilterStatus: null,
     selectedClientId: null,
     lang: localStorage.getItem('lang') || 'es',
+    theme: localStorage.getItem('theme') || 'dark',
 };
 
 // ─────────────────────────────────────────────
@@ -652,6 +653,11 @@ function renderLayout() {
                     <button class="logo-upload-btn" onclick="event.stopPropagation();document.getElementById('_logoFileHidden').click()" title="Cambiar logo de empresa">✏️</button>
                     <input type="file" id="_logoFileHidden" accept="image/*" style="display:none" onchange="handleLogoUpload(this)">
                     ` : ''}
+                    <button onclick="setTheme(State.theme==='dark'?'light':'dark')" title="${State.theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}"
+                        style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px;border-radius:6px;line-height:1;opacity:0.7;transition:opacity 0.15s;"
+                        onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+                        ${State.theme === 'dark' ? '☀️' : '🌙'}
+                    </button>
                 </div>
             </div>
             <nav class="sidebar-nav">
@@ -3895,6 +3901,7 @@ function renderEventRow(e, isAdmin) {
         <td>${eventStatusBadge(e)}</td>
         ${isAdmin ? `<td style="white-space:nowrap;">
             <button class="btn btn-secondary btn-sm" onclick="openEditEventModal(${e.id})" title="Editar">✏️</button>
+            <button class="btn btn-secondary btn-sm" onclick="openDuplicateEventModal(${e.id})" title="Duplicar" style="margin-left:4px;">📋</button>
             ${toggleBtn}
             <button class="btn btn-danger btn-sm" onclick="deleteEvent(${e.id})" title="Eliminar" style="margin-left:4px;">🗑️</button>
         </td>` : (canToggle ? `<td>${toggleBtn}</td>` : '')}
@@ -4035,6 +4042,50 @@ window.submitEditEvent = async function(id) {
         await api(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify({ name, client_id, start_date, end_date, location, notes, user_ids }) });
         closeModal();
         showToast('Evento actualizado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.openDuplicateEventModal = function(id) {
+    const ev = State.events.find(e => e.id === id);
+    if (!ev) return;
+    const clients = window._eventClients || [];
+    const users = window._eventUsers || [];
+    // Pre-fill with original data but suggest a copy name
+    const copyName = `${ev.name} (copia)`;
+    const evCopy = { ...ev, name: copyName };
+    openModal(`
+    <div class="modal" style="max-width:640px;">
+        <div class="modal-header">
+            <h3>📋 Duplicar Evento — ${esc(ev.name)}</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="padding:8px 12px;margin-bottom:12px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--text-muted);">
+                📋 Modifica el nombre, fechas y equipo del nuevo evento. Se creará como una copia independiente.
+            </div>
+            ${eventFormHTML(clients, users, evCopy)}
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="submitDuplicateEvent()">📋 Crear Evento</button>
+        </div>
+    </div>`);
+};
+
+window.submitDuplicateEvent = async function() {
+    const name = document.getElementById('evtName').value.trim();
+    const client_id = parseInt(document.getElementById('evtClient').value) || null;
+    const start_date = document.getElementById('evtStart').value;
+    const end_date = document.getElementById('evtEnd').value;
+    const location = document.getElementById('evtLocation').value;
+    const notes = document.getElementById('evtNotes').value;
+    const user_ids = [...document.querySelectorAll('.evt-user-check:checked')].map(c => parseInt(c.value));
+    if (!name || !start_date || !end_date) { showToast('Rellena los campos obligatorios', 'error'); return; }
+    try {
+        await api('/api/events', { method: 'POST', body: JSON.stringify({ name, client_id, start_date, end_date, location, notes, user_ids }) });
+        closeModal();
+        showToast('Evento duplicado correctamente', 'success');
         renderPage();
     } catch (err) { showToast(err.message, 'error'); }
 };
@@ -4193,7 +4244,7 @@ async function loadEventsCalendar(container) {
             });
             return `<div style="flex:1;min-width:0;">
                 <div style="font-weight:700;text-align:center;padding:8px 0;font-size:.9rem;">${MONTHS[m-1]}</div>
-                ${renderEventsMonthGrid(calYear, m, mEvents, todayStr, true)}
+                ${renderEventsMonthGrid(calYear, m, mEvents, todayStr, true, null, true)}
             </div>`;
         }).join('');
         mainContent = `<div style="display:flex;gap:12px;overflow-x:auto;">${mainContent}</div>`;
@@ -4267,7 +4318,7 @@ window.setEventsCalView = function(view) {
     }
 };
 
-function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, prebuiltWeeksHTML) {
+function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, prebuiltWeeksHTML, showLabel) {
     const BAR_H = compact ? 16 : 22;
     const BAR_GAP = compact ? 2 : 4;
     const DAY_H = compact ? 22 : 30;
@@ -4333,7 +4384,10 @@ function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, p
             const bleft=!isStart?'border-left:2px dashed rgba(255,255,255,0.4);':'';
             const bright=!isEnd?'border-right:2px dashed rgba(255,255,255,0.4);':'';
             const doneStyle2 = (e.status||'active')==='done' ? 'opacity:0.5;filter:grayscale(0.4);' : '';
-            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;${doneStyle2}" title="${esc(e.name)}${(e.status||'active')==='done'?' ✅':''}">${isStart&&!compact?`<span class="evt-bar-label" style="font-size:.7rem;">${(e.status||'active')==='done'?'✅ ':''}${esc(e.name)}</span>`:''}</div>`;
+            const labelStr = (e.status||'active')==='done' ? `✅ ${esc(e.name)}` : esc(e.name);
+            const showBarLabel = isStart && (!compact || showLabel);
+            const labelFontSize = compact ? '.62rem' : '.7rem';
+            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;${doneStyle2};overflow:hidden;" title="${esc(e.name)}${(e.status||'active')==='done'?' ✅':''}">${showBarLabel?`<span class="evt-bar-label" style="font-size:${labelFontSize};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${labelStr}</span>`:''}</div>`;
         }).join('');
         weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
     }
@@ -5115,7 +5169,16 @@ window.deleteSickLeave = async function(id) {
 // Init
 // ─────────────────────────────────────────────
 
+window.setTheme = function(theme) {
+    State.theme = theme;
+    localStorage.setItem('theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+};
+
 async function init() {
+    // Apply saved theme immediately
+    document.documentElement.setAttribute('data-theme', State.theme);
+
     try {
         const [meData, settings] = await Promise.all([
             api('/api/me'),
