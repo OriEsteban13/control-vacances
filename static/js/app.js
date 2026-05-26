@@ -3604,6 +3604,7 @@ async function loadEvents(container) {
                     ${[year-1, year, year+1].map(y => `<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
                 </select>
                 <button class="btn btn-secondary" onclick="exportEventsDashboardCSV()">⬇ CSV</button>
+                <button class="btn btn-secondary" onclick="exportEventsPDF()">⬇ PDF</button>
                 ${canEdit ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
             </div>
         </div>
@@ -4265,6 +4266,7 @@ async function loadEventsCalendar(container) {
                     ${['monthly','quarterly','annual'].map(v=>`<button onclick="setEventsCalView('${v}')" style="padding:6px 14px;border:none;cursor:pointer;font-size:.82rem;font-weight:600;background:${view===v?'var(--primary)':'var(--surface)'};color:${view===v?'#fff':'var(--text-secondary)'};">${viewLabels[v]}</button>`).join('')}
                 </div>
                 <button class="btn btn-secondary" onclick="exportEventsCalendarCSV()">⬇ CSV</button>
+                <button class="btn btn-secondary" onclick="exportEventsPDF()">⬇ PDF</button>
                 ${canEdit ? `<button class="btn btn-primary" onclick="openCreateEventModal()">＋ Nuevo Evento</button>` : ''}
             </div>
         </div>
@@ -4319,7 +4321,7 @@ window.setEventsCalView = function(view) {
 };
 
 function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, prebuiltWeeksHTML, showLabel) {
-    const BAR_H = compact ? 16 : 22;
+    const BAR_H = compact ? (showLabel ? 18 : 16) : 22;
     const BAR_GAP = compact ? 2 : 4;
     const DAY_H = compact ? 22 : 30;
     const PAD_TOP = 4;
@@ -4384,10 +4386,12 @@ function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, p
             const bleft=!isStart?'border-left:2px dashed rgba(255,255,255,0.4);':'';
             const bright=!isEnd?'border-right:2px dashed rgba(255,255,255,0.4);':'';
             const doneStyle2 = (e.status||'active')==='done' ? 'opacity:0.5;filter:grayscale(0.4);' : '';
-            const labelStr = (e.status||'active')==='done' ? `✅ ${esc(e.name)}` : esc(e.name);
+            const displayName = compact ? (e.client_name || e.name) : e.name;
+            const donePrefix = (e.status||'active')==='done' ? '✅ ' : '';
+            const labelStr = `${donePrefix}${esc(displayName)}`;
             const showBarLabel = isStart && (!compact || showLabel);
-            const labelFontSize = compact ? '.62rem' : '.7rem';
-            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;${doneStyle2};overflow:hidden;" title="${esc(e.name)}${(e.status||'active')==='done'?' ✅':''}">${showBarLabel?`<span class="evt-bar-label" style="font-size:${labelFontSize};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${labelStr}</span>`:''}</div>`;
+            const labelFontSize = compact ? '.6rem' : '.7rem';
+            return `<div class="evt-bar" onclick="openEventDetailModal(${e.id})" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${color};border-radius:${br};${bleft}${bright};cursor:pointer;${doneStyle2};overflow:hidden;" title="${esc(e.name)}${e.client_name?' · '+esc(e.client_name):''}${(e.status||'active')==='done'?' ✅':''}">${showBarLabel?`<span class="evt-bar-label" style="font-size:${labelFontSize};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:${BAR_H}px;">${labelStr}</span>`:''}</div>`;
         }).join('');
         weeksHTML += `<div class="evt-cal-week" style="height:${weekH}px;"><div class="evt-day-nums">${dayNums}</div>${barEls}</div>`;
     }
@@ -4409,7 +4413,7 @@ function renderEventsAnnualView(calYear, filtered, MONTHS) {
             const mEvts=filtered.filter(e=>e.start_date<=me&&e.end_date>=ms);
             return `<div style="background:var(--bg-glass);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
                 <div style="font-weight:700;text-align:center;padding:8px 0 4px;font-size:.9rem;color:var(--text-primary);">${MONTHS[i]}</div>
-                ${renderEventsMonthGrid(calYear, m, mEvts, todayStr, true)}
+                ${renderEventsMonthGrid(calYear, m, mEvts, todayStr, true, null, true)}
             </div>`;
         }).join('')}
     </div>`;
@@ -4901,6 +4905,10 @@ window.exportEventsDashboardCSV = function() {
         ]);
     }
     downloadCSV(rows, `dashboard_eventos_${State.eventsYear}.csv`);
+};
+
+window.exportEventsPDF = function() {
+    window.print();
 };
 
 window.exportEventsCalendarCSV = function() {

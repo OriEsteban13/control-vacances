@@ -2098,3 +2098,65 @@ textarea.form-input {
     line-height: 1;
     text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
+
+/* ─── Print / PDF Export ───────────────────── */
+
+@media print {
+    @page { margin: 12mm 14mm; size: A4 landscape; }
+
+    .sidebar, .modal-overlay, .modal,
+    .no-print, [onclick*="openCreateEventModal"],
+    [onclick*="openEditEventModal"], [onclick*="deleteEvent"],
+    [onclick*="openDuplicateEventModal"] { display: none !important; }
+
+    .main-content { margin-left: 0 !important; padding: 0 !important; }
+    .app-layout { display: block !important; }
+
+    body, html { background: #fff !important; color: #0f172a !important; font-size: 11px; }
+    .page-enter { padding: 0 !important; }
+
+    .panel {
+        background: #fff !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        margin-bottom: 12px !important;
+    }
+    .panel-header { border-bottom: 1px solid #e2e8f0 !important; padding: 8px 12px !important; }
+    .panel-body { padding: 8px 12px !important; }
+
+    .stat-card {
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: none !important;
+    }
+    .stats-grid { grid-template-columns: repeat(4, 1fr) !important; }
+
+    .data-table { border-collapse: collapse !important; width: 100% !important; }
+    .data-table th, .data-table td {
+        border: 1px solid #e2e8f0 !important;
+        padding: 4px 8px !important;
+        color: #0f172a !important;
+        font-size: 10px !important;
+    }
+    .data-table thead th { background: #f1f5f9 !important; }
+
+    .evt-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .evt-cal-week, .evt-cal-header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .evt-cal-wrapper { break-inside: avoid; page-break-inside: avoid; }
+
+    .btn, button { display: none !important; }
+    /* Keep print-trigger visible until actual print dialog */
+    .print-header-actions { display: none !important; }
+
+    h1 { font-size: 16px !important; margin-bottom: 8px !important; }
+    h2 { font-size: 13px !important; }
+
+    .page-header { margin-bottom: 10px !important; }
+    .page-header .print-header-actions { display: none !important; }
+}
+
+.print-pdf-btn {
+    display: flex; align-items: center; gap: 6px;
+}
