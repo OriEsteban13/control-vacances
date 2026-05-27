@@ -35,6 +35,8 @@ const State = {
     eventsFilterUser: null,
     eventsFilterStatus: null,
     selectedClientId: null,
+    teamView: 'cards',
+    clientsListView: 'cards',
     lang: localStorage.getItem('lang') || 'es',
     theme: localStorage.getItem('theme') || 'dark',
 };
@@ -1614,49 +1616,105 @@ window.reviewCancelVacation = async function(vacationId, action) {
 // Team Page
 // ─────────────────────────────────────────────
 
+window.setTeamView = function(v) { State.teamView = v; renderPage(); };
+window.setClientsListView = function(v) { State.clientsListView = v; renderPage(); };
+
 async function loadTeam(container) {
     const users = await api('/api/users');
     State.users = users;
 
+    const view = State.teamView;
+    const viewToggle = `<div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+        <button onclick="setTeamView('cards')" style="padding:6px 12px;border:none;cursor:pointer;font-size:.82rem;background:${view==='cards'?'var(--primary)':'var(--surface)'};color:${view==='cards'?'#fff':'var(--text-secondary)'};">⊞ Tarjetas</button>
+        <button onclick="setTeamView('table')" style="padding:6px 12px;border:none;cursor:pointer;font-size:.82rem;background:${view==='table'?'var(--primary)':'var(--surface)'};color:${view==='table'?'#fff':'var(--text-secondary)'};">☰ Tabla</button>
+    </div>`;
+
+    const cardsHTML = `<div class="employee-grid">
+        ${users.map(u => `
+        <div class="employee-card" onclick="goToEmployeeDetails(${u.id})" style="cursor:pointer">
+            <div class="employee-card-header">
+                <div class="employee-avatar-lg" style="background: ${u.avatar_image ? 'transparent' : u.avatar_color}">
+                    ${u.avatar_image ? `<img src="${u.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="">` : u.initials}
+                </div>
+                <div class="employee-card-info">
+                    <h3>${esc(u.full_name)}</h3>
+                    <p>${esc(u.department)} · <span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></p>
+                </div>
+            </div>
+            <div class="employee-card-stats">
+                <div class="emp-stat">
+                    <div class="emp-stat-value used">${u.days_used}</div>
+                    <div class="emp-stat-label">${t('used_label')}</div>
+                </div>
+                <div class="emp-stat">
+                    <div class="emp-stat-value pending-val">${u.days_pending}</div>
+                    <div class="emp-stat-label">${t('pending_label')}</div>
+                </div>
+                <div class="emp-stat">
+                    <div class="emp-stat-value remaining">${u.days_remaining + (u.extra_days || 0)}${u.extra_days > 0 ? `<span style="font-size:0.65rem;vertical-align:super;color:var(--accent-secondary);">⭐</span>` : ''}</div>
+                    <div class="emp-stat-label">${t('available_label')}</div>
+                </div>
+            </div>
+            <div class="progress-bar" style="margin-top: var(--space-md);">
+                <div class="progress-fill ${u.days_used / (u.total_days + (u.extra_days||0)) > 0.8 ? 'high' : u.days_used / (u.total_days + (u.extra_days||0)) > 0.5 ? 'medium' : ''}"
+                     style="width: ${Math.min(100, (u.days_used / Math.max(1, u.total_days + (u.extra_days||0))) * 100)}%"></div>
+            </div>
+        </div>`).join('')}
+    </div>`;
+
+    const tableHTML = `<div class="panel"><div class="panel-body no-padding">
+        <table class="data-table">
+            <thead><tr>
+                <th>Empleado</th>
+                <th>Departamento</th>
+                <th>Rol</th>
+                <th style="text-align:center;">Usados</th>
+                <th style="text-align:center;">Pendientes</th>
+                <th style="text-align:center;">Disponibles</th>
+                <th style="min-width:120px;">Progreso</th>
+            </tr></thead>
+            <tbody>${users.map(u => {
+                const total = Math.max(1, u.total_days + (u.extra_days||0));
+                const pct   = Math.min(100, Math.round(u.days_used / total * 100));
+                const cls   = pct > 80 ? 'high' : pct > 50 ? 'medium' : '';
+                const avail = u.days_remaining + (u.extra_days || 0);
+                return `<tr onclick="goToEmployeeDetails(${u.id})" style="cursor:pointer;">
+                    <td>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:32px;height:32px;border-radius:50%;background:${u.avatar_image?'transparent':u.avatar_color};display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;">
+                                ${u.avatar_image?`<img src="${u.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="">`:u.initials}
+                            </div>
+                            <span style="font-weight:600;">${esc(u.full_name)}</span>
+                        </div>
+                    </td>
+                    <td>${esc(u.department)}</td>
+                    <td><span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></td>
+                    <td style="text-align:center;color:var(--success);font-weight:700;">${u.days_used}</td>
+                    <td style="text-align:center;color:var(--warning);font-weight:700;">${u.days_pending}</td>
+                    <td style="text-align:center;color:var(--primary);font-weight:700;">${avail}${u.extra_days>0?'⭐':''}</td>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+                                <div class="progress-fill ${cls}" style="height:100%;width:${pct}%;border-radius:3px;"></div>
+                            </div>
+                            <span style="font-size:0.75rem;color:var(--text-muted);min-width:28px;">${pct}%</span>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>
+    </div></div>`;
+
     container.innerHTML = `
     <div class="page-enter">
-        <div class="page-header">
-            <h1>👥 ${t('team')}</h1>
-            <p>${t('team_subtitle')}</p>
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <h1>👥 ${t('team')}</h1>
+                <p>${t('team_subtitle')}</p>
+            </div>
+            ${viewToggle}
         </div>
-
-        <div class="employee-grid">
-            ${users.map(u => `
-            <div class="employee-card" onclick="goToEmployeeDetails(${u.id})" style="cursor:pointer">
-                <div class="employee-card-header">
-                    <div class="employee-avatar-lg" style="background: ${u.avatar_image ? 'transparent' : u.avatar_color}">
-                        ${u.avatar_image ? `<img src="${u.avatar_image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="">` : u.initials}
-                    </div>
-                    <div class="employee-card-info">
-                        <h3>${esc(u.full_name)}</h3>
-                        <p>${esc(u.department)} · <span class="role-badge ${esc(u.role)}">${translateRole(u.role)}</span></p>
-                    </div>
-                </div>
-                <div class="employee-card-stats">
-                    <div class="emp-stat">
-                        <div class="emp-stat-value used">${u.days_used}</div>
-                        <div class="emp-stat-label">${t('used_label')}</div>
-                    </div>
-                    <div class="emp-stat">
-                        <div class="emp-stat-value pending-val">${u.days_pending}</div>
-                        <div class="emp-stat-label">${t('pending_label')}</div>
-                    </div>
-                    <div class="emp-stat">
-                        <div class="emp-stat-value remaining">${u.days_remaining + (u.extra_days || 0)}${u.extra_days > 0 ? `<span style="font-size:0.65rem;vertical-align:super;color:var(--accent-secondary);">⭐</span>` : ''}</div>
-                        <div class="emp-stat-label">${t('available_label')}</div>
-                    </div>
-                </div>
-                <div class="progress-bar" style="margin-top: var(--space-md);">
-                    <div class="progress-fill ${u.days_used / (u.total_days + (u.extra_days||0)) > 0.8 ? 'high' : u.days_used / (u.total_days + (u.extra_days||0)) > 0.5 ? 'medium' : ''}"
-                         style="width: ${Math.min(100, (u.days_used / Math.max(1, u.total_days + (u.extra_days||0))) * 100)}%"></div>
-                </div>
-            </div>`).join('')}
-        </div>
+        ${view === 'table' ? tableHTML : cardsHTML}
     </div>`;
 }
 
@@ -4668,29 +4726,13 @@ async function loadClientsConfig(container) {
         byTypology[c.typology].push(c);
     }
 
-    container.innerHTML = `
-    <div class="page-enter">
-        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-                <h1>🏢 Clientes</h1>
-                <p>Configuración y tipología de clientes / propiedades</p>
-            </div>
-            ${canEdit ? `<button class="btn btn-primary" onclick="openCreateClientModal()">＋ ${State.lang==='en'?'New Client':State.lang==='ca'?'Nou Client':'Nuevo Cliente'}</button>` : ''}
-        </div>
+    const clView = State.clientsListView;
+    const clViewToggle = `<div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+        <button onclick="setClientsListView('cards')" style="padding:6px 12px;border:none;cursor:pointer;font-size:.82rem;background:${clView==='cards'?'var(--primary)':'var(--surface)'};color:${clView==='cards'?'#fff':'var(--text-secondary)'};">⊞ Tarjetas</button>
+        <button onclick="setClientsListView('table')" style="padding:6px 12px;border:none;cursor:pointer;font-size:.82rem;background:${clView==='table'?'var(--primary)':'var(--surface)'};color:${clView==='table'?'#fff':'var(--text-secondary)'};">☰ Tabla</button>
+    </div>`;
 
-        <!-- Stats quick -->
-        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:var(--space-lg);">
-            ${EVENT_TYPOLOGIES.map(typ => {
-                const count = clients.filter(c => c.typology === typ).length;
-                return count > 0 ? `<div class="stat-card info" style="border-top:3px solid ${TYPOLOGY_COLORS[typ]};">
-                    <div class="stat-value">${count}</div>
-                    <div class="stat-label">${typ}</div>
-                </div>` : '';
-            }).join('')}
-        </div>
-
-        <!-- Client cards by typology -->
-        ${Object.entries(byTypology).sort().map(([typ, list]) => `
+    const clientCardsHTML = Object.entries(byTypology).sort().map(([typ, list]) => `
         <div class="panel" style="margin-bottom:var(--space-lg);">
             <div class="panel-header">
                 <h2>${typologyBadge(typ)} ${typ}</h2>
@@ -4724,9 +4766,66 @@ async function loadClientsConfig(container) {
                     </div>
                 </div>`).join('')}
             </div>
-        </div>`).join('')}
+        </div>`).join('');
 
-        ${clients.length === 0 ? `<div class="empty-state"><div class="empty-icon">🏢</div><h3>No hay clientes configurados</h3><p>Crea el primer cliente para empezar a gestionar eventos.</p></div>` : ''}
+    const clientTableHTML = `<div class="panel"><div class="panel-body no-padding">
+        <table class="data-table">
+            <thead><tr>
+                <th>Cliente</th>
+                <th>Tipología</th>
+                <th style="text-align:center;">Total eventos</th>
+                <th style="text-align:center;">Próximos</th>
+                <th>Notas</th>
+                <th></th>
+            </tr></thead>
+            <tbody>${clients.sort((a,b)=>a.name.localeCompare(b.name)).map(c => `
+            <tr onclick="openClientDetail(${c.id})" style="cursor:pointer;">
+                <td>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:32px;height:32px;border-radius:6px;background:${c.color};flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1rem;overflow:hidden;border-left:3px solid ${c.color};">
+                            ${c.logo_data?`<img src="${c.logo_data}" style="width:100%;height:100%;object-fit:contain;" alt="">`:'🏢'}
+                        </div>
+                        <span style="font-weight:600;">${esc(c.name)}</span>
+                    </div>
+                </td>
+                <td>${typologyBadge(c.typology)}</td>
+                <td style="text-align:center;font-weight:700;">${c.total_events}</td>
+                <td style="text-align:center;font-weight:700;color:var(--primary);">${c.upcoming_events}</td>
+                <td style="font-size:0.82rem;color:var(--text-muted);">${c.notes ? esc(c.notes) : '—'}</td>
+                <td style="white-space:nowrap;" onclick="event.stopPropagation()">
+                    ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="openEditClientModal(${c.id})" title="Editar">✏️</button>` : ''}
+                    ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteClient(${c.id})" title="Eliminar" style="margin-left:4px;">🗑️</button>` : ''}
+                </td>
+            </tr>`).join('')}
+            </tbody>
+        </table>
+    </div></div>`;
+
+    container.innerHTML = `
+    <div class="page-enter">
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <h1>🏢 Clientes</h1>
+                <p>Configuración y tipología de clientes / propiedades</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                ${clViewToggle}
+                ${canEdit ? `<button class="btn btn-primary" onclick="openCreateClientModal()">＋ ${State.lang==='en'?'New Client':State.lang==='ca'?'Nou Client':'Nuevo Cliente'}</button>` : ''}
+            </div>
+        </div>
+
+        <!-- Stats quick -->
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:var(--space-lg);">
+            ${EVENT_TYPOLOGIES.map(typ => {
+                const count = clients.filter(c => c.typology === typ).length;
+                return count > 0 ? `<div class="stat-card info" style="border-top:3px solid ${TYPOLOGY_COLORS[typ]};">
+                    <div class="stat-value">${count}</div>
+                    <div class="stat-label">${typ}</div>
+                </div>` : '';
+            }).join('')}
+        </div>
+
+        ${clients.length === 0 ? `<div class="empty-state"><div class="empty-icon">🏢</div><h3>No hay clientes configurados</h3><p>Crea el primer cliente para empezar a gestionar eventos.</p></div>` : (clView === 'table' ? clientTableHTML : clientCardsHTML)}
     </div>`;
 }
 
