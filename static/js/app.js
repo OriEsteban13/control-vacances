@@ -1465,6 +1465,7 @@ async function loadRequests(container) {
                 <div style="display:flex;gap:8px;">
                     ${pendingCount > 0 ? `<button class="btn btn-success btn-sm" onclick="bulkApproveSelected()">✅ ${t('bulk_approve_btn')}</button>` : ''}
                     <button class="btn btn-secondary" onclick="exportVacations()">📥 ${t('export_csv')}</button>
+                    ${State.user.role === 'admin' || State.user.role === 'manager' ? `<button class="btn btn-primary" onclick="openAdminVacationModal()">＋ Registrar vacances</button>` : ''}
                 </div>
             </div>
         </div>
@@ -2384,6 +2385,8 @@ async function loadExtraDays(container) {
         api('/api/users'),
     ]);
 
+    window._extraDaysEntries = entries;
+
     // Build per-user summary
     const byUser = {};
     for (const u of users) {
@@ -2479,8 +2482,9 @@ async function loadExtraDays(container) {
                             <td>${e.work_date ? formatDate(e.work_date) : '<span style="color:var(--text-muted);">—</span>'}</td>
                             <td style="color:var(--text-muted);font-size:0.82rem;">${esc(e.created_by_name || '—')}</td>
                             <td style="color:var(--text-muted);font-size:0.82rem;">${e.created_at ? formatDate(e.created_at.split('T')[0]) : '—'}</td>
-                            <td>
-                                <button class="btn btn-danger btn-sm" onclick="deleteExtraDaysEntry(${e.id})" title="Eliminar">🗑️</button>
+                            <td style="white-space:nowrap;">
+                                <button class="btn btn-secondary btn-sm" onclick="openEditExtraDaysModal(${e.id})" title="Editar">✏️</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteExtraDaysEntry(${e.id})" title="Eliminar" style="margin-left:4px;">🗑️</button>
                             </td>
                         </tr>`).join('')}
                     </tbody>
@@ -2549,6 +2553,121 @@ window.deleteExtraDaysEntry = async function(id) {
     try {
         await api(`/api/extra-days/${id}`, { method: 'DELETE' });
         showToast('Registro eliminado', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.openEditExtraDaysModal = function(id) {
+    const entries = (State._extraDaysEntries || []);
+    // Fetch fresh from DOM since we may not have State cache — build from current rendered data
+    const allEntries = window._extraDaysEntries || [];
+    const e = allEntries.find(x => x.id === id);
+    if (!e) { showToast('No s\'ha trobat el registre', 'error'); return; }
+    openModal(`
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3>✏️ Editar Dies Extres</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:var(--space-md);">Empleat: <strong>${esc(e.employee_name)}</strong></p>
+            <div class="form-row">
+                <div class="form-group" style="flex:1;">
+                    <label>Dies *</label>
+                    <input type="number" class="form-input" id="eedDays" value="${e.days}" min="1" max="30">
+                </div>
+                <div class="form-group" style="flex:2;">
+                    <label>Data treballada</label>
+                    <input type="date" class="form-input" id="eedWorkDate" value="${e.work_date || ''}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Descripció / Motiu *</label>
+                <input type="text" class="form-input" id="eedReason" value="${esc(e.reason)}">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel·lar</button>
+            <button class="btn btn-primary" onclick="submitEditExtraDays(${id})">Desar canvis</button>
+        </div>
+    </div>`);
+};
+
+window.submitEditExtraDays = async function(id) {
+    const days = parseInt(document.getElementById('eedDays').value);
+    const work_date = document.getElementById('eedWorkDate').value || null;
+    const reason = document.getElementById('eedReason').value.trim();
+    if (!days || days < 1) { showToast('Els dies han de ser com a mínim 1', 'error'); return; }
+    if (!reason) { showToast('La descripció és obligatòria', 'error'); return; }
+    try {
+        await api(`/api/extra-days/${id}`, { method: 'PUT', body: JSON.stringify({ days, reason, work_date }) });
+        closeModal();
+        showToast('Dies extres actualitzats', 'success');
+        renderPage();
+    } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.openAdminVacationModal = async function(preselectedUserId = null) {
+    const users = await api('/api/users');
+    const today = new Date().toISOString().split('T')[0];
+    openModal(`
+    <div class="modal" style="max-width:520px;">
+        <div class="modal-header">
+            <h3>📅 Registrar vacances d'empleat</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:var(--space-md);">Les vacances es crearan com a aprovades i es descomptaran dels dies disponibles de l'empleat.</p>
+            <div class="form-group">
+                <label>Empleat *</label>
+                <select class="form-select" id="avUser">
+                    <option value="">— Seleccionar empleat —</option>
+                    ${users.map(u => `<option value="${u.id}" ${preselectedUserId === u.id ? 'selected' : ''}>${esc(u.full_name)} (${esc(u.department)})</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:1;">
+                    <label>Data inici *</label>
+                    <input type="date" class="form-input" id="avStart">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Data fi *</label>
+                    <input type="date" class="form-input" id="avEnd">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Tipus</label>
+                <select class="form-select" id="avType">
+                    <option value="vacaciones">Vacances</option>
+                    <option value="personal">Dies personals</option>
+                    <option value="otros">Altres</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Motiu / Nota</label>
+                <input type="text" class="form-input" id="avReason" placeholder="Opcional — registrat per l'admin">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel·lar</button>
+            <button class="btn btn-primary" onclick="submitAdminVacation()">Registrar i aprovar</button>
+        </div>
+    </div>`);
+};
+
+window.submitAdminVacation = async function() {
+    const user_id = parseInt(document.getElementById('avUser').value);
+    const start_date = document.getElementById('avStart').value;
+    const end_date = document.getElementById('avEnd').value;
+    const vacation_type = document.getElementById('avType').value;
+    const reason = document.getElementById('avReason').value.trim();
+    if (!user_id) { showToast('Selecciona un empleat', 'error'); return; }
+    if (!start_date || !end_date) { showToast('Les dates són obligatòries', 'error'); return; }
+    if (start_date > end_date) { showToast('La data d\'inici ha de ser anterior a la de fi', 'error'); return; }
+    try {
+        await api('/api/admin/vacations', { method: 'POST', body: JSON.stringify({ user_id, start_date, end_date, vacation_type, reason }) });
+        closeModal();
+        showToast('Vacances registrades i aprovades correctament', 'success');
         renderPage();
     } catch (err) { showToast(err.message, 'error'); }
 };

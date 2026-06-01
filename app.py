@@ -2438,6 +2438,73 @@ def delete_extra_days(entry_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/extra-days/<int:entry_id>', methods=['PUT'])
+@login_required
+def update_extra_days(entry_id):
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    entry = db.session.get(ExtraDaysEntry, entry_id)
+    if not entry:
+        return jsonify({'success': False, 'error': 'Entrada no encontrada'}), 404
+    data = request.get_json() or {}
+    if 'days' in data:
+        days = int(data['days'])
+        if days < 1:
+            return jsonify({'success': False, 'error': 'Los días deben ser al menos 1'}), 400
+        entry.days = days
+    if 'reason' in data:
+        entry.reason = data['reason'].strip()
+    if 'work_date' in data:
+        try:
+            entry.work_date = date_parser.parse(data['work_date']).date() if data['work_date'] else None
+        except (ValueError, TypeError):
+            pass
+    db.session.commit()
+    log_audit('update_extra_days', 'extra_days_entry', entry_id, f"days={entry.days}")
+    return jsonify({'success': True, 'entry': entry.to_dict()})
+
+
+@app.route('/api/admin/vacations', methods=['POST'])
+@login_required
+def admin_create_vacation():
+    if current_user.role not in ('admin', 'manager'):
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'user_id es obligatorio'}), 400
+    user = db.session.get(User, user_id)
+    if not user or user.is_deleted:
+        return jsonify({'success': False, 'error': 'Empleado no encontrado'}), 404
+    try:
+        start = date_parser.parse(data['start_date']).date()
+        end = date_parser.parse(data['end_date']).date()
+    except (KeyError, ValueError):
+        return jsonify({'success': False, 'error': 'Fechas inválidas'}), 400
+    if start > end:
+        return jsonify({'success': False, 'error': 'La fecha de inicio debe ser anterior a la de fin'}), 400
+    overlapping = VacationRequest.query.filter(
+        VacationRequest.user_id == user_id,
+        VacationRequest.status.in_(['pending', 'approved', 'cancel_requested']),
+        VacationRequest.start_date <= end,
+        VacationRequest.end_date >= start,
+    ).first()
+    if overlapping:
+        return jsonify({'success': False, 'error': 'El empleado ya tiene una solicitud en esas fechas'}), 400
+    vacation = VacationRequest(
+        user_id=user_id,
+        start_date=start,
+        end_date=end,
+        vacation_type=data.get('vacation_type', 'vacaciones'),
+        reason=data.get('reason', ''),
+        status='approved',
+    )
+    db.session.add(vacation)
+    db.session.commit()
+    log_audit('admin_create_vacation', 'vacation', vacation.id, f"admin={current_user.username} employee={user.username}")
+    return jsonify({'success': True, 'vacation': vacation.to_dict()})
+
+
 # API Routes — Audit Log & Backup
 # ─────────────────────────────────────────────
 
