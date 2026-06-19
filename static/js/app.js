@@ -1238,8 +1238,9 @@ function renderAnnualView(calData, year) {
 }
 
 function renderMiniMonthEvents(calData, month, year) {
-    const monthStart = new Date(year, month - 1, 1).toISOString().split('T')[0];
-    const monthEnd = new Date(year, month, 0).toISOString().split('T')[0];
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
     
     // This is rough because calData only has 1 month usually. 
     // Optimization: If annual, back-end should return whole year.
@@ -1275,7 +1276,7 @@ function renderCalendarGrid(calData) {
     // Current month days
     for (let d = 1; d <= lastDay.getDate(); d++) {
         const currentDate = new Date(year, month - 1, d);
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const isToday = currentDate.toDateString() === today.toDateString();
         const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
 
@@ -2291,7 +2292,7 @@ async function loadLateArrivals(container) {
                     </div>
                     <div class="form-group">
                         <label>Fecha</label>
-                        <input type="date" class="form-input" id="lateDate" value="${new Date().toISOString().split('T')[0]}">
+                        <input type="date" class="form-input" id="lateDate" value="${(() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })()}">
                     </div>
                     <div class="form-group" style="width: 120px;">
                         <label>Minutos</label>
@@ -2609,7 +2610,7 @@ window.submitEditExtraDays = async function(id) {
 
 window.openAdminVacationModal = async function(preselectedUserId = null) {
     const users = await api('/api/users');
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     openModal(`
     <div class="modal" style="max-width:520px;">
         <div class="modal-header">
@@ -2681,7 +2682,7 @@ async function loadDelegations(container) {
         api('/api/delegations'),
         api('/api/users'),
     ]);
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
 
     container.innerHTML = `
     <div class="page-enter">
@@ -2731,7 +2732,7 @@ async function loadDelegations(container) {
 window.openNewDelegationModal = async function() {
     const users = await api('/api/users');
     const managers = users.filter(u => u.role === 'admin' || u.role === 'manager');
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     openModal(`
     <div class="modal">
         <div class="modal-header">
@@ -2818,7 +2819,7 @@ function calcBusinessDays(startStr, endStr) {
     const end = new Date(endStr + 'T00:00:00');
     while (current <= end) {
         const dow = current.getDay();
-        const ds = current.toISOString().split('T')[0];
+        const ds = `${current.getFullYear()}-${String(current.getMonth()+1).padStart(2,'0')}-${String(current.getDate()).padStart(2,'0')}`;
         if (dow !== 0 && dow !== 6 && !holidays.includes(ds)) days++;
         current.setDate(current.getDate() + 1);
     }
@@ -2890,7 +2891,7 @@ window.openNewVacationModal = async function() {
         </div>
     </div>`);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     document.getElementById('vacStartDate').min = today;
     document.getElementById('vacEndDate').min = today;
 
@@ -3643,7 +3644,7 @@ function typologyBadge(typ) {
 
 function eventStatusBadge(ev) {
     if (ev.status === 'done') return `<span style="background:rgba(16,185,129,0.12);color:#10B981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">✅ Realizado</span>`;
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     if (ev.end_date < today) return `<span style="background:var(--color-success-bg);color:var(--color-success);border:1px solid var(--color-success-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">⏹ Pasado</span>`;
     if (ev.start_date <= today) return `<span style="background:var(--color-warning-bg);color:var(--color-warning);border:1px solid var(--color-warning-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">🔴 En curso</span>`;
     return `<span style="background:var(--color-info-bg);color:var(--color-info);border:1px solid var(--color-info-border);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">📅 Próximo</span>`;
@@ -3742,7 +3743,7 @@ async function loadEvents(container) {
     }
 
     const filtered = applyEventsFilters(events);
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     const upcoming = filtered.filter(e => e.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));
     const past = filtered.filter(e => e.end_date < today);
 
@@ -3922,7 +3923,7 @@ async function loadEvents(container) {
 // ─────────────────────────────────────────────
 
 async function renderEmployeeEventDetail(container, emp, allEvents, clients, users, isAdmin, year) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     const empEvents = allEvents
         .filter(e => e.assignments.some(a => a.user_id === emp.id))
         .sort((a, b) => a.start_date.localeCompare(b.start_date));
@@ -4580,7 +4581,7 @@ function renderEventsMonthGrid(calYear, month, monthEvents, todayStr, compact, p
 }
 
 function renderEventsAnnualView(calYear, filtered, MONTHS) {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:8px;">
         ${Array.from({length:12},(_,i)=>{
             const m = i+1;
@@ -4683,7 +4684,7 @@ async function loadClientsConfig(container) {
         const clientEvents = allEvents
             .filter(e => e.client_id === client.id)
             .sort((a,b) => a.start_date.localeCompare(b.start_date));
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
         const past     = clientEvents.filter(e => e.end_date < todayStr);
         const upcoming = clientEvents.filter(e => e.end_date >= todayStr);
         const total    = clientEvents.length;
@@ -5108,7 +5109,7 @@ function downloadCSV(rows, filename) {
 
 window.exportEventsDashboardCSV = function() {
     const events = applyEventsFilters(State.events || []);
-    const today  = new Date().toISOString().split('T')[0];
+    const today  = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     const rows   = [['Evento','Cliente','Tipología','Estado','Inicio','Fin','Días','Ubicación','Responsables']];
     for (const e of events.sort((a,b) => a.start_date.localeCompare(b.start_date))) {
         rows.push([
@@ -5187,7 +5188,7 @@ async function loadSickLeaves(container) {
     State.sickLeaves = leaves;
 
     // Count currently active (open) sick leaves
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
     const activeLeaves = leaves.filter(l => l.start_date <= today && (!l.end_date || l.end_date >= today));
 
     container.innerHTML = `
@@ -5238,7 +5239,7 @@ async function loadSickLeaves(container) {
                     </div>
                     <div class="form-group">
                         <label>Fecha inicio</label>
-                        <input type="date" class="form-input" id="slStart" value="${new Date().toISOString().split('T')[0]}">
+                        <input type="date" class="form-input" id="slStart" value="${(() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })()}">
                     </div>
                     <div class="form-group">
                         <label>Fecha fin <span style="color:var(--text-muted);font-size:0.8rem;">(opcional)</span></label>
