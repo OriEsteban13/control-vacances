@@ -1187,6 +1187,18 @@ textarea.form-input {
     border-left: 2px solid var(--color-warning);
 }
 
+.day-event.half-day {
+    background: rgba(167, 139, 250, 0.25);
+    color: var(--accent-secondary);
+    border-left: 2px solid var(--accent-secondary);
+}
+
+.type-badge.half-day {
+    background: rgba(167, 139, 250, 0.15);
+    border-color: rgba(167, 139, 250, 0.4);
+    color: var(--accent-secondary);
+}
+
 .day-holiday {
     padding: 2px 6px;
     border-radius: 4px;

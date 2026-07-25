@@ -1129,11 +1129,11 @@ function renderVacationTable(vacations, showActions = false) {
                     </div>
                 </td>
                 <td>
-                    <div style="font-size: 0.85rem;">${formatDate(v.start_date)} — ${formatDate(v.end_date)}</div>
+                    <div style="font-size: 0.85rem;">${formatDate(v.start_date)} — ${formatDate(v.end_date)}${isHalfDayLike(v) ? ' <span class="type-badge half-day">½ jornada</span>' : ''}</div>
                     ${v.reason ? `<div style="font-size:0.75rem;color:var(--text-muted);">${esc(v.reason)}</div>` : ''}
                 </td>
                 <td><span class="type-badge">${translateType(v.vacation_type)}</span></td>
-                <td><span style="font-weight: 700;">${v.business_days}</span></td>
+                <td><span style="font-weight: 700;">${fmtDays(v.business_days)}</span></td>
                 <td><span class="status-badge ${v.status}">${translateStatus(v.status)}</span></td>
                 ${showActions && isManager ? `
                 <td>
@@ -1299,8 +1299,8 @@ function renderCalendarGrid(calData) {
             <div class="day-events">
                 ${dayHolidays.map(h => `<div class="day-holiday" title="${esc(h.name)}">🎉 ${esc(h.name)}</div>`).join('')}
                 ${dayVacations.map(v => `
-                    <div class="day-event ${v.status}" title="${v.employee_name}: ${translateStatus(v.status)}">
-                        ${v.employee_initials} ${v.employee_name.split(' ')[0]}
+                    <div class="day-event ${v.status}${isHalfDayLike(v) ? ' half-day' : ''}" title="${v.employee_name}: ${translateStatus(v.status)}${isHalfDayLike(v) ? ' (½ jornada)' : ''}">
+                        ${isHalfDayLike(v) ? '½ ' : ''}${v.employee_initials} ${v.employee_name.split(' ')[0]}
                     </div>
                 `).join('')}
             </div>
@@ -1424,9 +1424,9 @@ function renderMyVacationsTable(vacations) {
         <tbody>
             ${vacations.map(v => `
             <tr>
-                <td style="font-weight: 600;">${formatDate(v.start_date)} — ${formatDate(v.end_date)}</td>
+                <td style="font-weight: 600;">${formatDate(v.start_date)} — ${formatDate(v.end_date)}${isHalfDayLike(v) ? ' <span class="type-badge half-day">½ jornada</span>' : ''}</td>
                 <td><span class="type-badge">${translateType(v.vacation_type)}</span></td>
-                <td><span style="font-weight: 700;">${v.business_days}</span></td>
+                <td><span style="font-weight: 700;">${fmtDays(v.business_days)}</span></td>
                 <td style="color: var(--text-muted); font-size: 0.85rem;">${esc(v.reason) || '—'}</td>
                 <td><span class="status-badge ${v.status}">${translateStatus(v.status)}</span></td>
                 <td>
@@ -2636,6 +2636,12 @@ window.openAdminVacationModal = async function(preselectedUserId = null) {
                     <input type="date" class="form-input" id="avEnd">
                 </div>
             </div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
+                    <input type="checkbox" id="avHalfDay" onchange="onAvHalfDayToggle()">
+                    Mitja jornada (0,5 dies)
+                </label>
+            </div>
             <div class="form-group">
                 <label>Tipus</label>
                 <select class="form-select" id="avType">
@@ -2656,17 +2662,30 @@ window.openAdminVacationModal = async function(preselectedUserId = null) {
     </div>`);
 };
 
+window.onAvHalfDayToggle = function() {
+    const half = document.getElementById('avHalfDay').checked;
+    const endInput = document.getElementById('avEnd');
+    if (half) {
+        endInput.value = document.getElementById('avStart').value;
+        endInput.disabled = true;
+    } else {
+        endInput.disabled = false;
+    }
+};
+
 window.submitAdminVacation = async function() {
     const user_id = parseInt(document.getElementById('avUser').value);
     const start_date = document.getElementById('avStart').value;
     const end_date = document.getElementById('avEnd').value;
+    const is_half_day = document.getElementById('avHalfDay').checked;
     const vacation_type = document.getElementById('avType').value;
     const reason = document.getElementById('avReason').value.trim();
     if (!user_id) { showToast('Selecciona un empleat', 'error'); return; }
     if (!start_date || !end_date) { showToast('Les dates són obligatòries', 'error'); return; }
     if (start_date > end_date) { showToast('La data d\'inici ha de ser anterior a la de fi', 'error'); return; }
+    if (is_half_day && start_date !== end_date) { showToast('Una mitja jornada ha de ser d\'un sol dia', 'error'); return; }
     try {
-        await api('/api/admin/vacations', { method: 'POST', body: JSON.stringify({ user_id, start_date, end_date, vacation_type, reason }) });
+        await api('/api/admin/vacations', { method: 'POST', body: JSON.stringify({ user_id, start_date, end_date, vacation_type, reason, is_half_day }) });
         closeModal();
         showToast('Vacances registrades i aprovades correctament', 'success');
         renderPage();
@@ -2811,9 +2830,15 @@ function closeModal() {
 
 window.closeModal = closeModal;
 
-function calcBusinessDays(startStr, endStr) {
+function calcBusinessDays(startStr, endStr, isHalfDay = false) {
     if (!startStr || !endStr) return 0;
     const holidays = (State.holidays || []).map(h => h.date);
+    if (isHalfDay) {
+        if (startStr !== endStr) return 0;
+        const d = new Date(startStr + 'T00:00:00');
+        const dow = d.getDay();
+        return (dow !== 0 && dow !== 6 && !holidays.includes(startStr)) ? 0.5 : 0;
+    }
     let days = 0;
     let current = new Date(startStr + 'T00:00:00');
     const end = new Date(endStr + 'T00:00:00');
@@ -2826,13 +2851,24 @@ function calcBusinessDays(startStr, endStr) {
     return days;
 }
 
+function fmtDays(n) {
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+// Treats both real half-day requests (is_half_day flag) and older entries
+// registered by typing "Mitja Jornada" as a free-text reason as half-day for display purposes.
+function isHalfDayLike(v) {
+    return !!(v.is_half_day || /mitja\s*jornada/i.test(v.reason || ''));
+}
+
 function updateVacDayCounter() {
     const start = document.getElementById('vacStartDate')?.value;
     const end = document.getElementById('vacEndDate')?.value;
+    const isHalfDay = document.getElementById('vacHalfDay')?.checked || false;
     const counter = document.getElementById('vacDayCounter');
     if (!counter) return;
     if (!start || !end || end < start) { counter.innerHTML = ''; return; }
-    const days = calcBusinessDays(start, end);
+    const days = calcBusinessDays(start, end, isHalfDay);
     const normalRem = State.user.days_remaining;
     const extraDays = State.user.extra_days || 0;
     const totalAvail = normalRem + extraDays;
@@ -2868,6 +2904,12 @@ window.openNewVacationModal = async function() {
                         <input type="date" class="form-input" id="vacEndDate" required oninput="updateVacDayCounter()">
                     </div>
                 </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
+                        <input type="checkbox" id="vacHalfDay" onchange="onVacHalfDayToggle()">
+                        Mitja jornada (0,5 dies)
+                    </label>
+                </div>
                 <div id="vacDayCounter" style="margin-bottom:12px;"></div>
                 <div class="form-group">
                     <label>Tipo</label>
@@ -2897,7 +2939,7 @@ window.openNewVacationModal = async function() {
 
     document.getElementById('vacStartDate').addEventListener('change', (e) => {
         document.getElementById('vacEndDate').min = e.target.value;
-        if (document.getElementById('vacEndDate').value < e.target.value) {
+        if (document.getElementById('vacEndDate').value < e.target.value || document.getElementById('vacHalfDay').checked) {
             document.getElementById('vacEndDate').value = e.target.value;
         }
         updateVacDayCounter();
@@ -2905,14 +2947,31 @@ window.openNewVacationModal = async function() {
     document.getElementById('vacEndDate').addEventListener('change', updateVacDayCounter);
 };
 
+window.onVacHalfDayToggle = function() {
+    const half = document.getElementById('vacHalfDay').checked;
+    const endInput = document.getElementById('vacEndDate');
+    if (half) {
+        endInput.value = document.getElementById('vacStartDate').value;
+        endInput.disabled = true;
+    } else {
+        endInput.disabled = false;
+    }
+    updateVacDayCounter();
+};
+
 window.submitNewVacation = async function() {
     const startDate = document.getElementById('vacStartDate').value;
     const endDate = document.getElementById('vacEndDate').value;
+    const isHalfDay = document.getElementById('vacHalfDay').checked;
     const type = document.getElementById('vacType').value;
     const reason = document.getElementById('vacReason').value;
 
     if (!startDate || !endDate) {
         showToast('Selecciona las fechas', 'error');
+        return;
+    }
+    if (isHalfDay && startDate !== endDate) {
+        showToast('Una sol·licitud de mitja jornada ha de ser d\'un sol dia', 'error');
         return;
     }
 
@@ -2923,7 +2982,8 @@ window.submitNewVacation = async function() {
                 start_date: startDate,
                 end_date: endDate,
                 vacation_type: type,
-                reason: reason
+                reason: reason,
+                is_half_day: isHalfDay
             })
         });
         closeModal();
@@ -3642,6 +3702,14 @@ function typologyBadge(typ) {
     return `<span style="background:${col}22;color:${col};border:1px solid ${col}44;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">${typ || 'Otro'}</span>`;
 }
 
+function renderCompletedCheckbox(assignment, canToggle) {
+    if (!assignment) return '<span style="color:var(--text-muted);">—</span>';
+    return `<input type="checkbox" ${assignment.completed ? 'checked' : ''} ${canToggle ? '' : 'disabled'}
+        title="${assignment.completed ? 'Finalizado' : 'Marcar como finalizado'}"
+        onchange="toggleAssignmentCompleted(${assignment.id}, ${assignment.completed})"
+        style="width:18px;height:18px;cursor:${canToggle ? 'pointer' : 'default'};accent-color:#10B981;">`;
+}
+
 function eventStatusBadge(ev) {
     if (ev.status === 'done') return `<span style="background:rgba(16,185,129,0.12);color:#10B981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600;">✅ Realizado</span>`;
     const today = (() => { const _t = new Date(); return `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; })();
@@ -3757,9 +3825,11 @@ async function loadEvents(container) {
         if (e.end_date >= today) byClientFiltered[cn].upcoming++;
         for (const a of e.assignments) {
             const en = a.employee_name;
-            if (!byEmployeeFiltered[en]) byEmployeeFiltered[en] = { count: 0, upcoming: 0, color: a.employee_avatar_color, initials: a.employee_initials, avatar: a.employee_avatar_image };
+            if (!byEmployeeFiltered[en]) byEmployeeFiltered[en] = { count: 0, upcoming: 0, completed: 0, pending: 0, color: a.employee_avatar_color, initials: a.employee_initials, avatar: a.employee_avatar_image };
             byEmployeeFiltered[en].count++;
             if (e.end_date >= today) byEmployeeFiltered[en].upcoming++;
+            if (a.completed) byEmployeeFiltered[en].completed++;
+            else byEmployeeFiltered[en].pending++;
         }
     }
 
@@ -3905,6 +3975,46 @@ async function loadEvents(container) {
             </div>
         </div>
 
+        <!-- Year-end summary per employee: completed vs pending -->
+        <div class="panel" style="margin-bottom:var(--space-lg);">
+            <div class="panel-header">
+                <h2>📋 Resumen Anual por Empleado</h2>
+                <span style="font-size:0.75rem;color:var(--text-muted);">Para revisión de fin de año</span>
+            </div>
+            <div class="panel-body no-padding">
+                ${Object.keys(byEmployeeFiltered).length === 0
+                    ? '<div class="empty-state" style="padding:24px;"><p>Sin asignaciones.</p></div>'
+                    : `<table class="data-table">
+                        <thead><tr><th>Empleado</th><th>Asignados</th><th>Finalizados</th><th>Pendientes</th><th>% Completado</th></tr></thead>
+                        <tbody>${Object.entries(byEmployeeFiltered).sort((a,b)=>b[1].pending-a[1].pending||a[0].localeCompare(b[0])).map(([name,d]) => {
+                            const u = users.find(u => u.full_name === name);
+                            const pct = d.count > 0 ? Math.round((d.completed / d.count) * 100) : 0;
+                            return `<tr ${u ? `style="cursor:pointer;" onclick="setEventsFilter('user',${u.id})"` : ''}>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:8px;">
+                                        ${renderAvatarEl(d.color, d.initials, d.avatar, 26)}
+                                        <span style="font-weight:600;font-size:0.85rem;">${esc(name)}</span>
+                                    </div>
+                                </td>
+                                <td style="text-align:center;">${d.count}</td>
+                                <td style="text-align:center;color:#10B981;font-weight:600;">${d.completed}</td>
+                                <td style="text-align:center;color:var(--color-warning);font-weight:600;">${d.pending}</td>
+                                <td style="text-align:center;">
+                                    <div style="display:inline-flex;align-items:center;gap:6px;">
+                                        <div style="width:60px;height:8px;background:var(--bg-glass);border-radius:4px;overflow:hidden;border:1px solid var(--border-color);">
+                                            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#10B981,#34D399);"></div>
+                                        </div>
+                                        <span style="font-size:0.78rem;color:var(--text-muted);">${pct}%</span>
+                                    </div>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                        </tbody>
+                    </table>`
+                }
+            </div>
+        </div>
+
         ${past.length > 0 ? `
         <div class="panel">
             <div class="panel-header"><h2>🗂️ Historial ${year}</h2><span style="font-size:0.8rem;color:var(--text-muted);">${past.length} finalizado(s)</span></div>
@@ -3931,6 +4041,12 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
     const upcoming = empEvents.filter(e => e.end_date >= today);
     const past = empEvents.filter(e => e.end_date < today);
     const totalDays = empEvents.reduce((s, e) => s + e.duration_days, 0);
+
+    const empAssignment = (ev) => ev.assignments.find(a => a.user_id === emp.id);
+    const canToggleEmp = emp.id === State.user.id || ['admin', 'manager'].includes(State.user.role);
+    const completedCount = empEvents.filter(e => { const a = empAssignment(e); return a && a.completed; }).length;
+    const pendingCount = empEvents.length - completedCount;
+    const donePct = empEvents.length > 0 ? Math.round((completedCount / empEvents.length) * 100) : 0;
 
     // Group events by month for timeline
     const byMonth = {};
@@ -3970,6 +4086,26 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
             <div class="stat-card success"><div class="stat-icon">🏢</div><div class="stat-value">${new Set(empEvents.map(e=>e.client_id).filter(Boolean)).size}</div><div class="stat-label">Clientes Distintos</div></div>
         </div>
 
+        <!-- Completion progress panel -->
+        <div class="panel" style="margin-bottom:var(--space-lg);">
+            <div class="panel-header">
+                <h2>📊 Estado de Realización</h2>
+                <div style="display:flex;gap:8px;">
+                    <span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:rgba(16,185,129,0.12);color:#10B981;font-weight:600;">✅ ${completedCount} finalizados</span>
+                    <span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:rgba(245,158,11,0.12);color:var(--color-warning);font-weight:600;">⏳ ${pendingCount} pendientes</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--text-muted);margin-bottom:6px;">
+                    <span>Progreso de realización ${year}</span>
+                    <span style="font-weight:700;color:${donePct >= 80 ? '#10B981' : donePct >= 50 ? 'var(--color-warning)' : 'var(--text-secondary)'};">${donePct}%</span>
+                </div>
+                <div style="height:14px;background:var(--bg-glass);border-radius:7px;overflow:hidden;border:1px solid var(--border-color);">
+                    <div style="height:100%;width:${donePct}%;background:linear-gradient(90deg,#10B981,#34D399);border-radius:7px;transition:width 0.4s ease;"></div>
+                </div>
+            </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-lg);">
             <!-- Upcoming table -->
             <div class="panel">
@@ -3981,7 +4117,7 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
                     ${upcoming.length === 0
                         ? '<div style="padding:24px;text-align:center;color:var(--text-muted);">Sin próximos eventos.</div>'
                         : `<table class="data-table">
-                            <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th></tr></thead>
+                            <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Finalizado</th></tr></thead>
                             <tbody>${upcoming.map(e => `<tr>
                                 <td>
                                     <div style="font-weight:600;font-size:0.85rem;">${esc(e.name)}</div>
@@ -3996,6 +4132,7 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
                                     ${e.start_date !== e.end_date ? `<div style="color:var(--text-muted);">→ ${formatDate(e.end_date)}</div>` : ''}
                                 </td>
                                 <td style="text-align:center;">${e.duration_days}</td>
+                                <td style="text-align:center;">${renderCompletedCheckbox(empAssignment(e), canToggleEmp)}</td>
                             </tr>`).join('')}
                             </tbody>
                         </table>`
@@ -4006,7 +4143,7 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
             <!-- Timeline by month -->
             <div class="panel">
                 <div class="panel-header"><h2>📆 Timeline ${year}</h2></div>
-                <div class="panel-body" style="max-height:500px;overflow-y:auto;">
+                <div class="panel-body">
                     ${Object.keys(byMonth).length === 0
                         ? '<p style="color:var(--text-muted);">Sin eventos este año.</p>'
                         : Object.entries(byMonth).sort().map(([ym, evList]) => {
@@ -4024,7 +4161,10 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
                                             <div style="font-size:0.75rem;color:var(--text-muted);">${formatDate(e.start_date)}${e.start_date!==e.end_date?` → ${formatDate(e.end_date)}`:''} · ${e.duration_days}d</div>
                                             ${e.client_name ? `<div style="font-size:0.72rem;margin-top:2px;">${typologyBadge(e.client_typology||'Otro')} ${esc(e.client_name)}</div>` : ''}
                                         </div>
-                                        <div>${eventStatusBadge(e)}</div>
+                                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                                            ${eventStatusBadge(e)}
+                                            ${renderCompletedCheckbox(empAssignment(e), canToggleEmp)}
+                                        </div>
                                     </div>`;
                                 }).join('')}
                             </div>`;
@@ -4039,13 +4179,14 @@ async function renderEmployeeEventDetail(container, emp, allEvents, clients, use
             <div class="panel-header"><h2>🗂️ Historial Finalizado</h2><span style="font-size:0.8rem;color:var(--text-muted);">${past.length} evento(s)</span></div>
             <div class="panel-body no-padding">
                 <table class="data-table">
-                    <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Estado</th></tr></thead>
+                    <thead><tr><th>Evento</th><th>Cliente</th><th>Fechas</th><th>Días</th><th>Estado</th><th>Finalizado</th></tr></thead>
                     <tbody>${past.slice().reverse().map(e => `<tr>
                         <td><strong>${esc(e.name)}</strong>${e.location?`<div style="font-size:0.72rem;color:var(--text-muted);">📍 ${esc(e.location)}</div>`:''}</td>
                         <td>${e.client_name?`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${e.client_color};"></span>${esc(e.client_name)}</span>`:'—'}</td>
                         <td style="white-space:nowrap;font-size:0.82rem;">${formatDate(e.start_date)}${e.start_date!==e.end_date?`<div style="color:var(--text-muted);">→ ${formatDate(e.end_date)}</div>`:''}</td>
                         <td style="text-align:center;">${e.duration_days}</td>
                         <td>${eventStatusBadge(e)}</td>
+                        <td style="text-align:center;">${renderCompletedCheckbox(empAssignment(e), canToggleEmp)}</td>
                     </tr>`).join('')}
                     </tbody>
                 </table>
@@ -4058,9 +4199,18 @@ function renderEventRow(e, isAdmin) {
     const isDone = (e.status || 'active') === 'done';
     const canToggle = ['admin', 'manager'].includes(State.user.role);
     const mutedStyle = isDone ? 'opacity:0.55;' : '';
-    const team = e.assignments.map(a =>
-        `<span title="${esc(a.employee_name)}" style="display:inline-block;margin-right:2px;">${renderAvatarEl(a.employee_avatar_color, a.employee_initials, a.employee_avatar_image, 24)}</span>`
-    ).join('');
+    const team = e.assignments.map(a => {
+        const canToggleThis = a.user_id === State.user.id || ['admin', 'manager'].includes(State.user.role);
+        const badge = a.completed
+            ? `<span style="position:absolute;bottom:-2px;right:-2px;width:11px;height:11px;border-radius:50%;background:#10B981;border:2px solid var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:7px;line-height:1;color:#fff;">✓</span>`
+            : `<span style="position:absolute;bottom:-2px;right:-2px;width:11px;height:11px;border-radius:50%;background:var(--bg-glass);border:2px solid var(--bg-card);"></span>`;
+        return `<span
+            ${canToggleThis ? `onclick="toggleAssignmentCompleted(${a.id}, ${a.completed})"` : ''}
+            title="${esc(a.employee_name)} — ${a.completed ? 'Finalizado' : 'Pendiente'}${canToggleThis ? ' (clic para cambiar)' : ''}"
+            style="position:relative;display:inline-block;margin-right:6px;${canToggleThis ? 'cursor:pointer;' : ''}">
+            ${renderAvatarEl(a.employee_avatar_color, a.employee_initials, a.employee_avatar_image, 24)}${badge}
+        </span>`;
+    }).join('');
     const clientDot = e.client_color
         ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${e.client_color};margin-right:5px;"></span>`
         : '';
@@ -4099,6 +4249,28 @@ window.toggleEventStatus = async function(eventId, currentStatus) {
         const idx = State.events.findIndex(e => e.id === eventId);
         if (idx !== -1) State.events[idx] = res.event;
         renderPage();
+    }
+};
+
+window.toggleAssignmentCompleted = async function(assignmentId, currentCompleted) {
+    try {
+        const res = await api(`/api/event-assignments/${assignmentId}/complete`, {
+            method: 'PATCH',
+            body: JSON.stringify({ completed: !currentCompleted })
+        });
+        if (res.success) {
+            for (const ev of (State.events || [])) {
+                const a = ev.assignments.find(x => x.id === assignmentId);
+                if (a) {
+                    a.completed = res.assignment.completed;
+                    a.completed_at = res.assignment.completed_at;
+                    break;
+                }
+            }
+            renderPage();
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
     }
 };
 
@@ -5120,7 +5292,7 @@ window.exportEventsDashboardCSV = function() {
             e.start_date, e.end_date,
             e.duration_days,
             e.location || '',
-            (e.assignments||[]).map(a=>a.employee_name).join(' | '),
+            (e.assignments||[]).map(a=>`${a.employee_name} [${a.completed ? 'Finalizado' : 'Pendiente'}]`).join(' | '),
         ]);
     }
     downloadCSV(rows, `dashboard_eventos_${State.eventsYear}.csv`);

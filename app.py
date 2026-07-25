@@ -253,11 +253,14 @@ class VacationRequest(db.Model):
     reviewed_at = db.Column(db.DateTime, nullable=True)
     cancel_reason = db.Column(db.Text, default='')
     cancellation_requested_at = db.Column(db.DateTime, nullable=True)
+    is_half_day = db.Column(db.Boolean, nullable=False, default=False)
 
     reviewer = db.relationship('User', foreign_keys=[reviewed_by])
 
     @property
     def business_days(self):
+        if self.is_half_day:
+            return 0.5 if self.start_date.weekday() < 5 and not PublicHoliday.query.filter_by(date=self.start_date).first() else 0
         holiday_dates = {h.date for h in PublicHoliday.query.filter(
             PublicHoliday.date >= self.start_date,
             PublicHoliday.date <= self.end_date,
@@ -285,6 +288,7 @@ class VacationRequest(db.Model):
             'reason': self.reason,
             'status': self.status,
             'business_days': self.business_days,
+            'is_half_day': self.is_half_day,
             'reviewed_by': self.reviewed_by,
             'reviewer_name': self.reviewer.full_name if self.reviewer else None,
             'review_comment': self.review_comment,
@@ -552,6 +556,8 @@ class EventAssignment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     role = db.Column(db.String(200), default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed = db.Column(db.Boolean, nullable=False, default=False)
+    completed_at = db.Column(db.DateTime, nullable=True)
 
     employee = db.relationship('User', foreign_keys=[user_id])
     __table_args__ = (db.UniqueConstraint('event_id', 'user_id', name='uq_event_assignment'),)
@@ -566,6 +572,8 @@ class EventAssignment(db.Model):
             'employee_avatar_color': self.employee.avatar_color if self.employee else '#666',
             'employee_avatar_image': self.employee.avatar_image if self.employee else None,
             'role': self.role,
+            'completed': self.completed,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
         }
 
 
@@ -995,12 +1003,17 @@ def create_vacation():
     if start < date.today():
         return jsonify({'success': False, 'error': 'No se pueden solicitar vacaciones en fechas pasadas'}), 400
 
+    is_half_day = bool(data.get('is_half_day', False))
+    if is_half_day and start != end:
+        return jsonify({'success': False, 'error': 'Una solicitud de mitja jornada ha de ser d\'un sol dia'}), 400
+
     vacation = VacationRequest(
         user_id=current_user.id,
         start_date=start,
         end_date=end,
         vacation_type=data.get('vacation_type', 'vacaciones'),
         reason=data.get('reason', ''),
+        is_half_day=is_half_day,
     )
 
     total_available = current_user.days_remaining() + current_user.extra_days_total()
@@ -1846,6 +1859,7 @@ def get_events_stats():
             if key not in by_employee:
                 by_employee[key] = {
                     'count': 0, 'upcoming': 0,
+                    'completed': 0, 'pending': 0,
                     'color': a.employee.avatar_color,
                     'initials': a.employee.initials,
                     'avatar': a.employee.avatar_image,
@@ -1853,6 +1867,10 @@ def get_events_stats():
             by_employee[key]['count'] += 1
             if e.end_date >= today:
                 by_employee[key]['upcoming'] += 1
+            if a.completed:
+                by_employee[key]['completed'] += 1
+            else:
+                by_employee[key]['pending'] += 1
 
     total_assignment_days = sum(
         e.duration_days for e in all_events for _ in e.assignments
@@ -1978,6 +1996,23 @@ def update_event_status(event_id):
     db.session.commit()
     log_audit('update_event_status', 'event', event_id, f"status={new_status}")
     return jsonify({'success': True, 'event': event.to_dict()})
+
+
+@app.route('/api/event-assignments/<int:assignment_id>/complete', methods=['PATCH'])
+@login_required
+def toggle_assignment_completed(assignment_id):
+    assignment = db.session.get(EventAssignment, assignment_id)
+    if not assignment:
+        return jsonify({'success': False, 'error': 'Asignación no encontrada'}), 404
+    if assignment.user_id != current_user.id and current_user.role not in ('admin', 'manager'):
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    completed = bool(data.get('completed', True))
+    assignment.completed = completed
+    assignment.completed_at = datetime.utcnow() if completed else None
+    db.session.commit()
+    log_audit('toggle_event_assignment', 'event_assignment', assignment.id, f"completed={completed}")
+    return jsonify({'success': True, 'assignment': assignment.to_dict()})
 
 
 # ─────────────────────────────────────────────
@@ -2483,6 +2518,9 @@ def admin_create_vacation():
         return jsonify({'success': False, 'error': 'Fechas inválidas'}), 400
     if start > end:
         return jsonify({'success': False, 'error': 'La fecha de inicio debe ser anterior a la de fin'}), 400
+    is_half_day = bool(data.get('is_half_day', False))
+    if is_half_day and start != end:
+        return jsonify({'success': False, 'error': 'Una solicitud de mitja jornada ha de ser d\'un sol dia'}), 400
     overlapping = VacationRequest.query.filter(
         VacationRequest.user_id == user_id,
         VacationRequest.status.in_(['pending', 'approved', 'cancel_requested']),
@@ -2498,6 +2536,7 @@ def admin_create_vacation():
         vacation_type=data.get('vacation_type', 'vacaciones'),
         reason=data.get('reason', ''),
         status='approved',
+        is_half_day=is_half_day,
     )
     db.session.add(vacation)
     db.session.commit()
@@ -2579,6 +2618,9 @@ def _run_migrations(db):
     migrations = [
         ('client', 'logo_data', 'TEXT'),
         ('event', 'status', "VARCHAR(20) DEFAULT 'active'"),
+        ('vacation_request', 'is_half_day', 'BOOLEAN DEFAULT 0'),
+        ('event_assignment', 'completed', 'BOOLEAN DEFAULT 0'),
+        ('event_assignment', 'completed_at', 'DATETIME'),
     ]
     with db.engine.connect() as conn:
         for table, column, col_type in migrations:
