@@ -2618,18 +2618,26 @@ def _run_migrations(db):
     migrations = [
         ('client', 'logo_data', 'TEXT'),
         ('event', 'status', "VARCHAR(20) DEFAULT 'active'"),
-        ('vacation_request', 'is_half_day', 'BOOLEAN DEFAULT 0'),
-        ('event_assignment', 'completed', 'BOOLEAN DEFAULT 0'),
-        ('event_assignment', 'completed_at', 'DATETIME'),
+        ('vacation_request', 'is_half_day', 'BOOLEAN DEFAULT FALSE'),
+        ('event_assignment', 'completed', 'BOOLEAN DEFAULT FALSE'),
+        ('event_assignment', 'completed_at', 'TIMESTAMP'),
     ]
-    with db.engine.connect() as conn:
-        for table, column, col_type in migrations:
-            if table in inspector.get_table_names():
-                existing = [c['name'] for c in inspector.get_columns(table)]
-                if column not in existing:
-                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'))
-                    conn.commit()
-                    print(f"[migration] Added {table}.{column}")
+    for table, column, col_type in migrations:
+        if table not in inspector.get_table_names():
+            continue
+        existing = [c['name'] for c in inspector.get_columns(table)]
+        if column in existing:
+            continue
+        # Each migration gets its own connection/transaction so a single
+        # incompatible statement (e.g. a type unsupported by the DB engine)
+        # can't abort the whole batch or block admin-password sync below.
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'))
+                conn.commit()
+            print(f"[migration] Added {table}.{column}")
+        except Exception as e:
+            print(f"[migration] ERROR adding {table}.{column}: {e}")
 
 
 def init_db():
