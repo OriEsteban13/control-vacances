@@ -2551,13 +2551,15 @@ def fix_half_day_legacy():
     """One-off cleanup: older half-day requests were registered by typing
     'Mitja Jornada' as a free-text reason (under type 'Altre'), before the
     real is_half_day field existed, so they still count as full days.
-    Auto-fixes the unambiguous single-day ones; multi-day ranges are
-    reported back for manual review instead of being guessed at."""
+    Single-day requests are flipped to is_half_day=True directly. Multi-day
+    ranges are interpreted as half a day on every business day in the range
+    (consistent with the single-day case) and are split into one half-day
+    request per business day, replacing the original record."""
     if current_user.role != 'admin':
         return jsonify({'success': False, 'error': 'No autorizado'}), 403
     pattern = re.compile(r'mitja\s*jornada', re.IGNORECASE)
     candidates = VacationRequest.query.filter(VacationRequest.is_half_day.is_(False)).all()
-    fixed, skipped = [], []
+    fixed, split = [], []
     for v in candidates:
         if not v.reason or not pattern.search(v.reason):
             continue
@@ -2571,10 +2573,29 @@ def fix_half_day_legacy():
             v.is_half_day = True
             fixed.append(entry)
         else:
-            skipped.append(entry)
+            holiday_dates = {h.date for h in PublicHoliday.query.filter(
+                PublicHoliday.date >= v.start_date, PublicHoliday.date <= v.end_date,
+            ).all()}
+            business_days = []
+            cur = v.start_date
+            while cur <= v.end_date:
+                if cur.weekday() < 5 and cur not in holiday_dates:
+                    business_days.append(cur)
+                cur += timedelta(days=1)
+            for d in business_days:
+                db.session.add(VacationRequest(
+                    user_id=v.user_id, start_date=d, end_date=d,
+                    vacation_type=v.vacation_type, reason=v.reason,
+                    status=v.status, is_half_day=True,
+                    reviewed_by=v.reviewed_by, review_comment=v.review_comment,
+                    created_at=v.created_at, reviewed_at=v.reviewed_at,
+                ))
+            db.session.delete(v)
+            entry['split_into'] = len(business_days)
+            split.append(entry)
     db.session.commit()
-    log_audit('fix_half_day_legacy', 'vacation_request', None, f"fixed={len(fixed)} skipped={len(skipped)}")
-    return jsonify({'success': True, 'fixed': fixed, 'skipped': skipped})
+    log_audit('fix_half_day_legacy', 'vacation_request', None, f"fixed={len(fixed)} split={len(split)}")
+    return jsonify({'success': True, 'fixed': fixed, 'split': split})
 
 
 # API Routes — Audit Log & Backup
