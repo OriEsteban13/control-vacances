@@ -2545,18 +2545,16 @@ def admin_create_vacation():
     return jsonify({'success': True, 'vacation': vacation.to_dict()})
 
 
-@app.route('/api/admin/vacations/fix-half-day-legacy', methods=['POST'])
-@login_required
-def fix_half_day_legacy():
+def _fix_half_day_legacy_data():
     """One-off cleanup: older half-day requests were registered by typing
     'Mitja Jornada' as a free-text reason (under type 'Altre'), before the
     real is_half_day field existed, so they still count as full days.
     Single-day requests are flipped to is_half_day=True directly. Multi-day
     ranges are interpreted as half a day on every business day in the range
     (consistent with the single-day case) and are split into one half-day
-    request per business day, replacing the original record."""
-    if current_user.role != 'admin':
-        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    request per business day, replacing the original record.
+    Idempotent — already-fixed rows (is_half_day=True) are skipped, so this
+    is safe to run on every startup as well as on demand."""
     pattern = re.compile(r'mitja\s*jornada', re.IGNORECASE)
     candidates = VacationRequest.query.filter(VacationRequest.is_half_day.is_(False)).all()
     fixed, split = [], []
@@ -2594,6 +2592,15 @@ def fix_half_day_legacy():
             entry['split_into'] = len(business_days)
             split.append(entry)
     db.session.commit()
+    return fixed, split
+
+
+@app.route('/api/admin/vacations/fix-half-day-legacy', methods=['POST'])
+@login_required
+def fix_half_day_legacy():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    fixed, split = _fix_half_day_legacy_data()
     log_audit('fix_half_day_legacy', 'vacation_request', None, f"fixed={len(fixed)} split={len(split)}")
     return jsonify({'success': True, 'fixed': fixed, 'split': split})
 
@@ -2745,6 +2752,14 @@ def init_db():
                 db.session.add_all(holidays)
                 db.session.commit()
                 print("[init_db] ✅ Festivos creados")
+
+            try:
+                fixed, split = _fix_half_day_legacy_data()
+                if fixed or split:
+                    print(f"[init_db] ✅ Corregidas {len(fixed)} solicitudes de mitja jornada, {len(split)} divididas")
+            except Exception as e:
+                print(f"[init_db] ERROR fixing legacy half-day requests: {e}")
+                db.session.rollback()
         except Exception as e:
             print(f"[init_db] ERROR: {e}")
             print(traceback.format_exc())
