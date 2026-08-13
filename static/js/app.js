@@ -1466,6 +1466,7 @@ async function loadRequests(container) {
                 <div style="display:flex;gap:8px;">
                     ${pendingCount > 0 ? `<button class="btn btn-success btn-sm" onclick="bulkApproveSelected()">✅ ${t('bulk_approve_btn')}</button>` : ''}
                     <button class="btn btn-secondary" onclick="exportVacations()">📥 ${t('export_csv')}</button>
+                    ${State.user.role === 'admin' ? `<button class="btn btn-secondary" onclick="fixHalfDayLegacy()" title="Corrige a 0.5 días las solicitudes antiguas de un solo día registradas con 'Mitja Jornada' como nota">🔧 Corregir mitja jornada</button>` : ''}
                     ${State.user.role === 'admin' || State.user.role === 'manager' ? `<button class="btn btn-primary" onclick="openAdminVacationModal()">＋ Registrar vacances</button>` : ''}
                 </div>
             </div>
@@ -1494,6 +1495,38 @@ window.setFilter = function(status) {
 
 window.exportVacations = function() {
     window.location.href = `/api/vacations/export?year=${State.stats ? State.stats.year : new Date().getFullYear()}`;
+};
+
+window.fixHalfDayLegacy = async function() {
+    if (!confirm("Esto recalculará a 0.5 días las solicitudes antiguas de un solo día que tengan 'Mitja Jornada' como nota. Los rangos de varios días no se tocan automáticamente. ¿Continuar?")) return;
+    try {
+        const res = await api('/api/admin/vacations/fix-half-day-legacy', { method: 'POST' });
+        if (!res.success) { showToast(res.error || 'Error', 'error'); return; }
+        const fixedList = res.fixed.map(f => `• ${esc(f.employee)} — ${formatDate(f.start_date)}`).join('<br>');
+        const skippedList = res.skipped.map(s => `• ${esc(s.employee)} — ${formatDate(s.start_date)} → ${formatDate(s.end_date)}`).join('<br>');
+        openModal(`
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🔧 Corrección de mitja jornada</h3>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="color:#10B981;font-weight:600;">✅ ${res.fixed.length} solicitud(es) corregidas a 0.5 días</p>
+                ${res.fixed.length ? `<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">${fixedList}</div>` : ''}
+                ${res.skipped.length ? `
+                <p style="color:var(--color-warning);font-weight:600;">⚠️ ${res.skipped.length} solicitud(es) con varios días — requieren revisión manual</p>
+                <p style="font-size:0.8rem;color:var(--text-muted);">Estas abarcan más de un día con nota "Mitja Jornada", así que no se han tocado automáticamente. Bórralas y vuelve a registrarlas usando el checkbox de mitja jornada si corresponde:</p>
+                <div style="font-size:0.85rem;color:var(--text-muted);">${skippedList}</div>
+                ` : ''}
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal()">Entendido</button>
+            </div>
+        </div>`);
+        renderPage();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
 };
 
 window.reviewVacation = async function(id, action) {

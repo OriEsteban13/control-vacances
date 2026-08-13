@@ -14,6 +14,7 @@ import json
 import os
 import io
 import csv
+import re
 import secrets
 import hashlib
 from flask import Response
@@ -2542,6 +2543,38 @@ def admin_create_vacation():
     db.session.commit()
     log_audit('admin_create_vacation', 'vacation', vacation.id, f"admin={current_user.username} employee={user.username}")
     return jsonify({'success': True, 'vacation': vacation.to_dict()})
+
+
+@app.route('/api/admin/vacations/fix-half-day-legacy', methods=['POST'])
+@login_required
+def fix_half_day_legacy():
+    """One-off cleanup: older half-day requests were registered by typing
+    'Mitja Jornada' as a free-text reason (under type 'Altre'), before the
+    real is_half_day field existed, so they still count as full days.
+    Auto-fixes the unambiguous single-day ones; multi-day ranges are
+    reported back for manual review instead of being guessed at."""
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'error': 'No autorizado'}), 403
+    pattern = re.compile(r'mitja\s*jornada', re.IGNORECASE)
+    candidates = VacationRequest.query.filter(VacationRequest.is_half_day.is_(False)).all()
+    fixed, skipped = [], []
+    for v in candidates:
+        if not v.reason or not pattern.search(v.reason):
+            continue
+        entry = {
+            'id': v.id,
+            'employee': v.employee.full_name if v.employee else '—',
+            'start_date': v.start_date.isoformat(),
+            'end_date': v.end_date.isoformat(),
+        }
+        if v.start_date == v.end_date:
+            v.is_half_day = True
+            fixed.append(entry)
+        else:
+            skipped.append(entry)
+    db.session.commit()
+    log_audit('fix_half_day_legacy', 'vacation_request', None, f"fixed={len(fixed)} skipped={len(skipped)}")
+    return jsonify({'success': True, 'fixed': fixed, 'skipped': skipped})
 
 
 # API Routes — Audit Log & Backup
